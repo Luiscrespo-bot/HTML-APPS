@@ -1,0 +1,2510 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>DUNGEON CRAWLER</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a0f;
+    color: #c8ff80;
+    font-family: 'VT323', monospace;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg, transparent, transparent 2px,
+      rgba(0,255,0,0.015) 2px, rgba(0,255,0,0.015) 4px
+    );
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  h1 {
+    font-size: 2.4rem;
+    letter-spacing: 0.3em;
+    color: #ff6b35;
+    text-shadow: 0 0 20px #ff6b3588, 0 0 40px #ff6b3544;
+    margin-bottom: 6px;
+    animation: flicker 4s infinite;
+  }
+
+  @keyframes flicker {
+    0%,95%,100% { opacity:1; } 96% { opacity:0.85; } 97% { opacity:1; } 98% { opacity:0.7; }
+  }
+
+  #stats {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.85rem;
+    color: #88bbff;
+    margin-bottom: 8px;
+    letter-spacing: 0.12em;
+  }
+
+  #map-container {
+    border: 2px solid #2a4a2a;
+    box-shadow: 0 0 30px #00ff0022, inset 0 0 30px #00000044;
+    padding: 2px;
+    background: #060a06;
+    position: relative;
+  }
+
+  #map-container::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at center, transparent 55%, #060a06cc 100%);
+    pointer-events: none;
+    z-index: 5;
+  }
+
+  canvas { display: block; image-rendering: pixelated; outline: none; }
+
+  #msg {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.82rem;
+    color: #ffd700;
+    height: 1.1em;
+    margin-top: 5px;
+    letter-spacing: 0.1em;
+    text-shadow: 0 0 8px #ffd70066;
+  }
+
+  #controls {
+    margin-top: 10px;
+    display: flex;
+    gap: 16px;
+    align-items: center;
+  }
+
+  /* ── Help button ── */
+  #btn-help {
+    width: 36px; height: 36px;
+    background: #0d1a0d;
+    border: 2px solid #3a7a3a;
+    border-radius: 50%;
+    color: #88ff88;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1.1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 0 8px #00ff0022;
+    flex-shrink: 0;
+  }
+  #btn-help:hover { background: #1a2a1a; box-shadow: 0 0 16px #00ff0055; color: #c8ff80; border-color: #88ff88; }
+
+  /* ── Help overlay ── */
+  #help-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  #help-overlay.open { display: flex; }
+
+  #help-panel {
+    background: #080f08;
+    border: 2px solid #3a7a3a;
+    box-shadow: 0 0 40px #00ff0033, 0 0 80px #00ff0011;
+    padding: 20px 24px 16px;
+    width: 340px;
+    max-width: 95vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  #help-close {
+    position: absolute;
+    top: 10px; right: 12px;
+    background: transparent;
+    border: 1px solid #3a5a3a;
+    color: #88cc88;
+    font-size: 0.9rem;
+    width: 26px; height: 26px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+  }
+  #help-close:hover { background: #1a2a1a; color: #ff6666; border-color: #ff4444; }
+
+  #help-title {
+    font-family: 'VT323', monospace;
+    font-size: 1.5rem;
+    color: #ff6b35;
+    text-shadow: 0 0 10px #ff6b3566;
+    text-align: center;
+    margin-bottom: 14px;
+    letter-spacing: 0.15em;
+  }
+
+  .help-section {
+    font-size: 0.65rem;
+    color: #3a7a3a;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    border-bottom: 1px solid #1a3a1a;
+    padding-bottom: 3px;
+    margin: 10px 0 6px;
+  }
+
+  .help-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    font-size: 0.78rem;
+    color: #8aaa8a;
+    margin: 4px 0;
+    line-height: 1.4;
+  }
+  .help-row > :first-child { min-width: 70px; color: #c8ff80; flex-shrink: 0; }
+
+  kbd {
+    background: #1a2a1a;
+    border: 1px solid #3a5a3a;
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.72rem;
+    color: #aaddaa;
+  }
+
+  .help-tip {
+    margin-top: 12px;
+    font-size: 0.68rem;
+    color: #4a6a4a;
+    line-height: 1.5;
+    border-top: 1px solid #1a3a1a;
+    padding-top: 8px;
+  }
+
+  /* ── D-pad ── */
+  #dpad {
+    display: grid;
+    grid-template-columns: repeat(3, 38px);
+    grid-template-rows: repeat(3, 38px);
+    gap: 3px;
+    margin-top: 4px;
+  }
+  .dpad-btn {
+    background: #1a2a1a;
+    border: 1px solid #3a5a3a;
+    border-radius: 5px;
+    color: #88cc88;
+    font-size: 1.1rem;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.1s;
+  }
+  .dpad-btn:active, .dpad-btn.active { background: #2a4a2a; color: #c8ff80; box-shadow: 0 0 8px #00ff0044; }
+  .dpad-center { background: transparent; border-color: transparent; cursor: default; }
+  #btn-fire {
+    margin-top: 4px;
+    width: 117px; height: 34px;
+    background: #1a1a0a;
+    border: 1px solid #ffd70066;
+    border-radius: 5px;
+    color: #ffd700;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.7rem;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    transition: background 0.1s;
+  }
+  #btn-fire:active { background: #2a2a0a; box-shadow: 0 0 8px #ffd70044; }
+
+  #btn-regen {
+    margin-top: 10px;
+    background: transparent;
+    border: 1px solid #ff6b35;
+    color: #ff6b35;
+    font-family: 'VT323', monospace;
+    font-size: 1.2rem;
+    padding: 5px 22px;
+    cursor: pointer;
+    letter-spacing: 0.2em;
+    transition: all 0.2s;
+  }
+  #btn-regen:hover { background: #ff6b3522; box-shadow: 0 0 12px #ff6b3566; }
+
+  #btn-change-mode {
+    margin-top: 10px;
+    margin-left: 8px;
+    background: transparent;
+    border: 1px solid #3a6a6a;
+    color: #4a9a9a;
+    font-family: 'VT323', monospace;
+    font-size: 1.2rem;
+    padding: 5px 22px;
+    cursor: pointer;
+    letter-spacing: 0.2em;
+    transition: all 0.2s;
+  }
+  #btn-change-mode:hover { background: #0a1a1a; box-shadow: 0 0 12px #00cfff22; color: #00cfff; border-color: #00cfff66; }
+
+  /* ── Mode select screen ── */
+  /* hide touch controls by default, shown only in mobile mode */
+  #touch-controls { display: none; }
+
+  /* ═══════════════════════════════════════
+     MENU SYSTEM
+  ═══════════════════════════════════════ */
+  .menu-screen {
+    position: fixed;
+    inset: 0;
+    background: #04070a;
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .menu-screen.hidden { display: none !important; }
+
+  .menu-screen::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      repeating-linear-gradient(0deg, transparent, transparent 30px, rgba(0,255,80,0.025) 30px, rgba(0,255,80,0.025) 31px),
+      repeating-linear-gradient(90deg, transparent, transparent 30px, rgba(0,255,80,0.015) 30px, rgba(0,255,80,0.015) 31px);
+    pointer-events: none;
+  }
+
+  .menu-logo {
+    font-family: 'VT323', monospace;
+    font-size: clamp(2.8rem, 8vw, 5.5rem);
+    color: #ff6b35;
+    text-shadow: 0 0 30px #ff6b3599, 0 0 60px #ff6b3533;
+    letter-spacing: 0.25em;
+    animation: flicker 4s infinite;
+    text-align: center;
+  }
+  .menu-sub {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.65rem;
+    color: #2a4a2a;
+    letter-spacing: 0.35em;
+    margin-bottom: 44px;
+    margin-top: 2px;
+  }
+
+  .menu-btn {
+    width: 280px;
+    padding: 13px 0 13px 20px;
+    margin: 6px 0;
+    background: transparent;
+    border: 1px solid #1e3e1e;
+    font-family: 'VT323', monospace;
+    font-size: 1.85rem;
+    letter-spacing: 0.2em;
+    cursor: pointer;
+    color: #6a9a6a;
+    text-align: left;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.15s;
+  }
+  .menu-btn::before {
+    content: '▶';
+    position: absolute;
+    left: -20px;
+    top: 50%; transform: translateY(-50%);
+    font-size: 0.85rem;
+    color: #ff6b35;
+    transition: left 0.15s;
+  }
+  .menu-btn:hover { background: #0a140a; border-color: #44aa44; color: #c8ff80; transform: translateX(10px); }
+  .menu-btn:hover::before { left: 6px; }
+
+  .menu-btn.play  { color: #ff8855; border-color: #ff6b3544; font-size: 2.1rem; }
+  .menu-btn.play:hover  { background: #1a0800; border-color: #ff6b35; color: #ff6b35; box-shadow: 0 0 24px #ff6b3522; }
+
+  .menu-version {
+    position: absolute; bottom: 14px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.55rem; color: #152015; letter-spacing: 0.3em;
+  }
+
+  /* ── OPTIONS SCREEN ── */
+  .opt-title {
+    font-family: 'VT323', monospace;
+    font-size: 2.2rem; color: #ff6b35;
+    letter-spacing: 0.3em; margin-bottom: 24px;
+    text-shadow: 0 0 14px #ff6b3544;
+  }
+  .opt-section {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.58rem; color: #2a5a2a;
+    letter-spacing: 0.4em; text-transform: uppercase;
+    border-bottom: 1px solid #1a3a1a;
+    width: 340px; padding-bottom: 4px; margin: 18px 0 10px;
+  }
+
+  .toggle-group { display: flex; gap: 10px; }
+  .toggle-btn {
+    flex: 1; max-width: 160px; padding: 10px 0;
+    background: #080f08; border: 1px solid #1a3a1a; border-radius: 6px;
+    font-family: 'VT323', monospace; font-size: 1.25rem; color: #3a5a3a;
+    cursor: pointer; transition: all 0.15s; text-align: center;
+  }
+  .toggle-btn .ti { display: block; font-size: 1.5rem; margin-bottom: 1px; }
+  .toggle-btn .ts { display: block; font-family: 'Share Tech Mono', monospace; font-size: 0.5rem; color: #2a3a2a; }
+  .toggle-btn.sel { background: #0d1a0d; border-color: #44aa44; color: #c8ff80; box-shadow: 0 0 12px #00ff0022; }
+  .toggle-btn.sel .ts { color: #4a7a4a; }
+
+  .diff-grid { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; max-width: 360px; }
+  .diff-card {
+    width: 96px; padding: 11px 6px;
+    background: #06100a; border: 1px solid #1a2a1a; border-radius: 6px;
+    cursor: pointer; transition: all 0.15s; text-align: center;
+  }
+  .diff-card .di { font-size: 1.5rem; display: block; margin-bottom: 3px; }
+  .diff-card .dn {
+    font-family: 'VT323', monospace; font-size: 1rem;
+    letter-spacing: 0.08em; display: block; margin-bottom: 2px;
+    color: var(--dc);
+  }
+  .diff-card .dd {
+    font-family: 'Share Tech Mono', monospace; font-size: 0.46rem;
+    color: #2a4a2a; display: block; line-height: 1.4;
+  }
+  .diff-card:hover { transform: translateY(-3px); border-color: var(--dc); }
+  .diff-card.sel { border-color: var(--dc); background: #0d180d; box-shadow: 0 0 14px color-mix(in srgb, var(--dc) 30%, transparent); }
+
+  .opt-actions { display: flex; gap: 12px; margin-top: 24px; }
+  .opt-btn {
+    padding: 9px 26px; background: transparent;
+    border: 1px solid #2a4a2a; border-radius: 4px;
+    font-family: 'VT323', monospace; font-size: 1.45rem;
+    color: #6a9a6a; cursor: pointer; letter-spacing: 0.15em; transition: all 0.15s;
+  }
+  .opt-btn:hover { background: #0d1a0d; color: #c8ff80; border-color: #44aa44; }
+  .opt-btn.primary { border-color: #ff6b3544; color: #cc6633; }
+  .opt-btn.primary:hover { background: #1a0800; border-color: #ff6b35; color: #ff8855; box-shadow: 0 0 14px #ff6b3522; }
+
+  /* ══════════════════════════════════════
+     MULTIPLAYER — v2
+  ══════════════════════════════════════ */
+  #screen-mp { overflow-y: auto; padding-bottom: 20px; }
+
+  .mp-title {
+    font-family: 'VT323', monospace; font-size: 2.4rem;
+    color: #00cfff; letter-spacing: 0.25em; margin-bottom: 4px;
+    text-shadow: 0 0 24px #00cfff55; animation: flicker 5s infinite;
+  }
+  .mp-sub {
+    font-family: 'Share Tech Mono', monospace; font-size: 0.58rem;
+    color: #1a5a5a; letter-spacing: 0.28em; margin-bottom: 18px;
+  }
+  .mp-panel {
+    background: #040d0f; border: 1px solid #0e3a3a;
+    border-radius: 10px; padding: 20px 22px;
+    width: 360px; max-width: 96vw;
+    box-shadow: 0 0 40px #00cfff08, inset 0 0 20px #00000044;
+  }
+
+  /* Role buttons */
+  .mp-role-group { display: flex; gap: 10px; margin-bottom: 16px; }
+  .mp-role-btn {
+    flex: 1; padding: 11px 0; background: #050c0e;
+    border: 1px solid #0c3030; border-radius: 8px;
+    font-family: 'VT323', monospace; font-size: 1.3rem; color: #2a6060;
+    cursor: pointer; transition: all 0.14s; text-align: center;
+  }
+  .mp-role-btn .ri { display: block; font-size: 1.4rem; margin-bottom: 1px; }
+  .mp-role-btn .rs { display: block; font-family: 'Share Tech Mono', monospace; font-size: 0.46rem; color: #1a4040; margin-top: 2px; }
+  .mp-role-btn:hover { border-color: #1a7070; color: #3a9090; }
+  .mp-role-btn.sel { background: #060f10; border-color: #00cfff99; color: #00cfff; box-shadow: 0 0 14px #00cfff18; }
+  .mp-role-btn.sel .rs { color: #2a8888; }
+
+  /* Step wizard */
+  .mp-steps { display: flex; align-items: center; gap: 6px; margin-bottom: 14px; }
+  .mp-step {
+    width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+    font-family: 'Share Tech Mono', monospace; font-size: 0.6rem; font-weight: bold;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid #0c3030; color: #1a5050; background: #040c0e;
+    transition: all 0.25s;
+  }
+  .mp-step.active { border-color: #00cfff; color: #00cfff; background: #060f10; box-shadow: 0 0 8px #00cfff33; }
+  .mp-step.done   { border-color: #44ff88; color: #44ff88; background: #060e08; }
+  .mp-sline { flex: 1; height: 1px; background: #0c3030; transition: background 0.25s; }
+  .mp-sline.done { background: #44ff8866; }
+
+  /* Section headers */
+  .mp-sect {
+    font-family: 'Share Tech Mono', monospace; font-size: 0.52rem;
+    color: #1a5050; letter-spacing: 0.3em; text-transform: uppercase;
+    border-bottom: 1px solid #0a2a2a; padding-bottom: 3px; margin: 12px 0 7px;
+  }
+  .mp-sect.hi { color: #00cfff66; border-color: #00cfff22; }
+
+  /* Code boxes */
+  .mp-code-box {
+    background: #030a0b; border: 1px solid #0e3a3a; border-radius: 6px;
+    padding: 9px 11px; font-family: 'Share Tech Mono', monospace;
+    font-size: 0.52rem; color: #00cfff; word-break: break-all;
+    min-height: 52px; max-height: 88px; overflow-y: auto;
+    user-select: all; cursor: text; transition: border-color 0.2s;
+  }
+  .mp-code-box.placeholder { color: #0c3535; font-style: italic; }
+  .mp-code-box.ready { border-color: #44ff8866; }
+
+  /* Paste areas */
+  .mp-paste {
+    width: 100%; margin-top: 7px; padding: 8px 10px;
+    background: #030a0b; border: 1px solid #0e3a3a; border-radius: 6px;
+    font-family: 'Share Tech Mono', monospace; font-size: 0.52rem;
+    color: #7ababa; resize: none; min-height: 58px;
+    transition: border-color 0.2s;
+  }
+  .mp-paste:focus { outline: none; border-color: #00cfff44; }
+  .mp-paste::placeholder { color: #0c3535; }
+
+  /* Buttons */
+  .mp-btn {
+    width: 100%; margin-top: 7px; padding: 9px;
+    background: transparent; border: 1px solid #0e3a3a; border-radius: 6px;
+    font-family: 'VT323', monospace; font-size: 1.25rem; color: #2a7070;
+    cursor: pointer; letter-spacing: 0.12em; transition: all 0.13s;
+  }
+  .mp-btn:hover:not(:disabled) { background: #060f10; border-color: #00cfff88; color: #00cfff; box-shadow: 0 0 10px #00cfff14; }
+  .mp-btn:disabled { opacity: 0.22; cursor: default; }
+  .mp-btn.go  { border-color: #00cfff44; color: #00cfff88; }
+  .mp-btn.go:hover:not(:disabled) { border-color: #00cfff; color: #00cfff; box-shadow: 0 0 16px #00cfff22; }
+  .mp-btn.ok  { border-color: #44ff8844; color: #44ff8888; }
+  .mp-btn.ok:hover:not(:disabled) { border-color: #44ff88; color: #44ff88; }
+  .mp-btn.back { border-color: #3a1010; color: #6a3030; margin-top: 12px; }
+  .mp-btn.back:hover:not(:disabled) { background: #100808; border-color: #ff4444; color: #ff6666; }
+
+  /* Pulse for "Connect" when ready */
+  @keyframes mp-pulse {
+    0%,100% { box-shadow: 0 0 0 0 #44ff8833; }
+    50%      { box-shadow: 0 0 10px 4px #44ff8822; }
+  }
+  .mp-btn.pulse { animation: mp-pulse 1.2s infinite; border-color: #44ff8866; color: #44ff88; }
+
+
+  /* Status line */
+  .mp-sl {
+    margin-top: 10px; font-family: 'Share Tech Mono', monospace;
+    font-size: 0.58rem; text-align: center; min-height: 1.3em;
+    letter-spacing: 0.06em; padding-top: 8px; border-top: 1px solid #0a2a2a;
+  }
+  .mp-ok   { color: #44ff88; }
+  .mp-err  { color: #ff4466; }
+  .mp-wait { color: #ffd700; animation: blink 0.9s step-start infinite; }
+  @keyframes blink { 50% { opacity: 0.15; } }
+
+  /* Radar spinner */
+  #mp-radar {
+    display: none; align-items: center; justify-content: center;
+    gap: 10px; margin: 10px 0; font-family: 'Share Tech Mono', monospace;
+    font-size: 0.55rem; color: #1a7070; letter-spacing: 0.2em;
+  }
+  .mp-ring {
+    width: 28px; height: 28px; border-radius: 50%;
+    border: 2px solid #00cfff33; position: relative;
+    animation: spin 1.2s linear infinite;
+  }
+  .mp-ring::after {
+    content: ''; position: absolute; top: 3px; left: 50%; height: 50%;
+    width: 2px; background: linear-gradient(#00cfff, transparent);
+    transform-origin: bottom center;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Hint strip */
+  .mp-hint {
+    font-family: 'Share Tech Mono', monospace; font-size: 0.46rem;
+    color: #0e3a3a; text-align: center; margin-top: 8px; letter-spacing: 0.1em;
+  }
+
+  /* ── IN-GAME PEER HUD ── */
+  #peer-hud {
+    display: none; flex-direction: row; align-items: center; gap: 8px;
+    background: #040d0f; border: 1px solid #0e3a3a; border-radius: 8px;
+    padding: 5px 12px; font-family: 'Share Tech Mono', monospace;
+    font-size: 0.62rem; color: #00cfff; margin-top: 4px;
+    max-width: 100%; flex-wrap: wrap;
+  }
+  #peer-hud-label { color: #00cfff88; flex-shrink: 0; }
+  #peer-hp-wrap { flex: 1; min-width: 60px; max-width: 90px; height: 5px; background: #0a2a2a; border-radius: 3px; overflow: hidden; }
+  #peer-hp-bar  { height: 100%; background: #00cfff; border-radius: 3px; transition: width 0.3s, background 0.3s; }
+  #peer-hp-txt  { font-size: 0.55rem; color: #4a9a9a; }
+  #peer-kills-txt { font-size: 0.55rem; color: #3a8a8a; }
+  #peer-dist-txt  { font-size: 0.52rem; transition: color 0.3s; }
+
+  /* Latency badge */
+  #mp-latency {
+    display: none; font-family: 'Share Tech Mono', monospace;
+    font-size: 0.5rem; color: #44ff88; margin-left: 4px; letter-spacing: 0.05em;
+  }
+
+  /* Off-screen arrow */
+  #peer-arrow {
+    display: none; position: absolute; top: 5px; right: 6px;
+    font-family: 'Share Tech Mono', monospace; font-size: 0.58rem;
+    color: #00cfff; background: #04101488; padding: 2px 6px;
+    border-radius: 4px; pointer-events: none; z-index: 6;
+    letter-spacing: 0.08em; border: 1px solid #00cfff33;
+  }
+
+  /* Minimap */
+  #mp-minimap {
+    display: none; position: fixed; bottom: 100px; right: 16px;
+    background: #030a0b; border: 1px solid #0e3a3a; border-radius: 6px;
+    padding: 4px; z-index: 50;
+  }
+  #mp-minimap canvas { display: block; image-rendering: pixelated; }
+  #mp-minimap-label {
+    font-family: 'Share Tech Mono', monospace; font-size: 0.44rem;
+    color: #1a5050; text-align: center; margin-top: 2px; letter-spacing: 0.15em;
+  }
+
+  /* Quick chat */
+  #quick-chat {
+    display: none; position: fixed; bottom: 90px; left: 50%;
+    transform: translateX(-50%);
+    background: #040d0f; border: 1px solid #0e3a3a;
+    border-radius: 8px; padding: 8px; z-index: 60;
+    flex-direction: column; gap: 4px; min-width: 160px;
+  }
+  .qchat-btn {
+    padding: 7px 12px; background: transparent; border: 1px solid #0e3a3a;
+    border-radius: 4px; font-family: 'VT323', monospace; font-size: 1.1rem;
+    color: #3a8888; cursor: pointer; transition: all 0.1s; text-align: left;
+  }
+  .qchat-btn:hover { border-color: #00cfff88; color: #00cfff; background: #060f10; }
+
+
+
+  .mp-title {
+    font-family: 'VT323', monospace;
+    font-size: 2.4rem; color: #00cfff;
+    letter-spacing: 0.25em; margin-bottom: 4px;
+    text-shadow: 0 0 20px #00cfff55, 0 0 40px #00cfff22;
+    animation: flicker 5s infinite;
+  }
+  .mp-sub {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.6rem; color: #1a5a5a; letter-spacing: 0.3em; margin-bottom: 20px;
+  }
+  .mp-panel {
+    background: #050e10; border: 1px solid #104040;
+    border-radius: 10px; padding: 20px 24px;
+    width: 360px; max-width: 95vw;
+    box-shadow: 0 0 30px #00cfff0a, inset 0 0 20px #00000033;
+  }
+  .mp-role-group { display: flex; gap: 10px; margin-bottom: 18px; }
+  .mp-role-btn {
+    flex: 1; padding: 12px 0; background: #060f10;
+    border: 1px solid #0d3a3a; border-radius: 8px;
+    font-family: 'VT323', monospace; font-size: 1.3rem; color: #2a6a6a;
+    cursor: pointer; transition: all 0.15s; text-align: center;
+  }
+  .mp-role-btn .ri { display: block; font-size: 1.5rem; margin-bottom: 2px; }
+  .mp-role-btn .rs { display: block; font-family: 'Share Tech Mono', monospace; font-size: 0.48rem; color: #1a4a4a; margin-top: 2px; }
+  .mp-role-btn:hover { border-color: #1a7a7a; color: #4aaa aa; background: #081414; }
+  .mp-role-btn.sel { background: #071818; border-color: #00cfff; color: #00cfff; box-shadow: 0 0 16px #00cfff1a; }
+  .mp-role-btn.sel .rs { color: #2a8a8a; }
+
+  /* Step indicator */
+  .mp-steps { display: flex; align-items: center; gap: 6px; margin-bottom: 16px; }
+  .mp-step {
+    display: flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; border-radius: 50%;
+    font-family: 'Share Tech Mono', monospace; font-size: 0.65rem; font-weight: bold;
+    border: 1px solid #0d3a3a; color: #1a5a5a; background: #040d0e;
+    transition: all 0.3s; flex-shrink: 0;
+  }
+  .mp-step.active { border-color: #00cfff; color: #00cfff; background: #071818; box-shadow: 0 0 10px #00cfff33; }
+  .mp-step.done   { border-color: #44ff88; color: #44ff88; background: #071408; }
+  .mp-step-line { flex: 1; height: 1px; background: #0d3a3a; }
+  .mp-step-line.done { background: #44ff88; }
+
+  .mp-section {
+    font-family: 'Share Tech Mono', monospace; font-size: 0.54rem;
+    color: #1a5a5a; letter-spacing: 0.35em; text-transform: uppercase;
+    border-bottom: 1px solid #0a3030; padding-bottom: 3px; margin: 14px 0 8px;
+  }
+  .mp-section.active-step { color: #00cfff88; border-color: #00cfff22; }
+
+  .mp-code-box {
+    background: #030a0b; border: 1px solid #104040; border-radius: 6px;
+    padding: 10px 12px; font-family: 'Share Tech Mono', monospace;
+    font-size: 0.55rem; color: #00cfff; word-break: break-all;
+    min-height: 56px; max-height: 90px; overflow-y: auto;
+    cursor: text; user-select: all; position: relative;
+    transition: border-color 0.2s;
+  }
+  .mp-code-box.placeholder { color: #0d3a3a; font-style: italic; }
+  .mp-code-box.ready { border-color: #44ff88; box-shadow: 0 0 10px #44ff8822; }
+
+  /* QR container */
+  #mp-qr-wrap {
+    display: none; margin: 8px auto 0; text-align: center;
+  }
+  #mp-qr-wrap canvas { border: 2px solid #104040; border-radius: 6px; }
+  #mp-qr-label { font-family: 'Share Tech Mono', monospace; font-size: 0.5rem; color: #1a5a5a; margin-top: 4px; letter-spacing: 0.2em; }
+
+  .mp-paste {
+    width: 100%; margin-top: 8px; padding: 8px;
+    background: #030a0b; border: 1px solid #104040; border-radius: 6px;
+    font-family: 'Share Tech Mono', monospace; font-size: 0.55rem;
+    color: #88cccc; resize: vertical; min-height: 60px;
+    transition: border-color 0.2s;
+  }
+  .mp-paste:focus { outline: none; border-color: #00cfff55; }
+  .mp-paste::placeholder { color: #0d3a3a; }
+
+  /* Buttons */
+  .mp-btn {
+    width: 100%; margin-top: 8px; padding: 10px;
+    background: transparent; border: 1px solid #104040; border-radius: 6px;
+    font-family: 'VT323', monospace; font-size: 1.3rem; color: #3a8a8a;
+    cursor: pointer; letter-spacing: 0.15em; transition: all 0.15s;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .mp-btn:hover:not(:disabled) { background: #071818; border-color: #00cfff; color: #00cfff; box-shadow: 0 0 12px #00cfff1a; }
+  .mp-btn:disabled { opacity: 0.25; cursor: default; }
+  .mp-btn.primary { border-color: #00cfff44; color: #00cfff88; }
+  .mp-btn.primary:hover:not(:disabled) { background: #071820; border-color: #00cfff; color: #00cfff; box-shadow: 0 0 18px #00cfff22; }
+  .mp-btn.danger  { border-color: #3a1010; color: #6a3030; }
+  .mp-btn.danger:hover:not(:disabled)  { background: #120808; border-color: #ff4444; color: #ff6666; }
+  .mp-btn.success { border-color: #44ff8844; color: #44ff8888; }
+  .mp-btn.success:hover:not(:disabled) { border-color: #44ff88; color: #44ff88; background: #071408; }
+
+
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════
+     SCREEN 1 · MAIN MENU
+════════════════════════════════════════ -->
+<div id="screen-main" class="menu-screen">
+  <div class="menu-logo">⚔ DUNGEON ⚔</div>
+  <div class="menu-sub">INFINITE ROGUELIKE · v1.0</div>
+
+  <button class="menu-btn play" id="btn-play">▶ &nbsp;JUGAR</button>
+  <button class="menu-btn"      id="btn-mp" style="color:#00cfff;border-color:#00cfff33">⚡ &nbsp;MULTIJUGADOR</button>
+  <button class="menu-btn"      id="btn-options">⚙ &nbsp;OPCIONES</button>
+  <button class="menu-btn"      id="btn-howto">? &nbsp;CÓMO JUGAR</button>
+
+  <div class="menu-version">⚔ DUNGEON CRAWLER ∞ · 2025</div>
+</div>
+
+<!-- ════════════════════════════════════════
+     SCREEN 2 · OPTIONS
+════════════════════════════════════════ -->
+<div id="screen-options" class="menu-screen hidden">
+  <div class="opt-title">⚙ OPCIONES</div>
+
+  <div class="opt-section">DISPOSITIVO</div>
+  <div class="toggle-group">
+    <button class="toggle-btn sel" id="tog-pc">
+      <span class="ti">🖥️</span> PC
+      <span class="ts">WASD + ESPACIO</span>
+    </button>
+    <button class="toggle-btn" id="tog-mobile">
+      <span class="ti">📱</span> MÓVIL
+      <span class="ts">D-PAD táctil</span>
+    </button>
+  </div>
+
+  <div class="opt-section">DIFICULTAD</div>
+  <div class="diff-grid">
+    <div class="diff-card" data-diff="baby" style="--dc:#44aaff">
+      <span class="di">🍼</span>
+      <span class="dn">BEBÉ</span>
+      <span class="dd">Sin enemigos<br>HP ilimitado</span>
+    </div>
+    <div class="diff-card" data-diff="easy" style="--dc:#44ff88">
+      <span class="di">🌿</span>
+      <span class="dn">FÁCIL</span>
+      <span class="dd">Enemigos lentos<br>+regen rápida</span>
+    </div>
+    <div class="diff-card sel" data-diff="normal" style="--dc:#ffd700">
+      <span class="di">⚔</span>
+      <span class="dn">NORMAL</span>
+      <span class="dd">Experiencia<br>estándar</span>
+    </div>
+    <div class="diff-card" data-diff="hard" style="--dc:#ff8800">
+      <span class="di">🔥</span>
+      <span class="dn">DIFÍCIL</span>
+      <span class="dd">Enemigos fuertes<br>-pociones</span>
+    </div>
+    <div class="diff-card" data-diff="hell" style="--dc:#ff2244">
+      <span class="di">💀</span>
+      <span class="dn">INFIERNO</span>
+      <span class="dd">Sin regen<br>daño x2</span>
+    </div>
+  </div>
+
+  <div class="opt-actions">
+    <button class="opt-btn" id="btn-opts-back">← VOLVER</button>
+    <button class="opt-btn primary" id="btn-opts-play">▶ JUGAR</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     SCREEN 3 · HOW TO PLAY (reuses help panel)
+════════════════════════════════════════ -->
+<div id="screen-howto" class="menu-screen hidden">
+  <div class="opt-title">? CÓMO JUGAR</div>
+  <div style="overflow-y:auto;max-height:70vh;width:340px;max-width:95vw">
+    <div class="opt-section">MOVIMIENTO</div>
+    <div style="font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:#6a8a6a;line-height:2">
+      <div><kbd style="background:#1a2a1a;border:1px solid #3a5a3a;border-radius:3px;padding:1px 5px;color:#aaddaa">W A S D</kbd> &nbsp;Mover al jugador</div>
+      <div><kbd style="background:#1a2a1a;border:1px solid #3a5a3a;border-radius:3px;padding:1px 5px;color:#aaddaa">ESPACIO</kbd> &nbsp;Disparar</div>
+      <div><kbd style="background:#1a2a1a;border:1px solid #3a5a3a;border-radius:3px;padding:1px 5px;color:#aaddaa">1 – 5</kbd> &nbsp;Cambiar arma activa</div>
+      <div><kbd style="background:#1a2a1a;border:1px solid #3a5a3a;border-radius:3px;padding:1px 5px;color:#aaddaa">R</kbd> &nbsp;Reiniciar (Game Over)</div>
+    </div>
+    <div class="opt-section">SALUD</div>
+    <div style="font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:#6a8a6a;line-height:2">
+      <div><span style="color:#ff4466">+</span> Poción — +20 HP</div>
+      <div><span style="color:#ff2244">♥</span> Corazón — +50 HP y sube HP máximo</div>
+      <div><span style="color:#c8860a">☕</span> Café mágico — +8 HP</div>
+      <div><span style="color:#44ff88">💚</span> Regen pasiva: +1 HP c/15 pasos</div>
+    </div>
+    <div class="opt-section">ARMAS</div>
+    <div style="font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:#6a8a6a;line-height:2">
+      <div><span style="color:#ffd700">W</span> Pistola — 1 dmg, estándar</div>
+      <div><span style="color:#00cfff">R</span> Rifle — 2 dmg, bala rápida</div>
+      <div><span style="color:#ff6600">S</span> Escopeta — 5 balas en abanico</div>
+      <div><span style="color:#ff44aa">B</span> Bazuka — 3 dmg, lento</div>
+      <div><span style="color:#44ff88">M</span> Metralleta — ráfaga x3</div>
+    </div>
+    <div class="opt-section">ENEMIGOS</div>
+    <div style="font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:#6a8a6a;line-height:2">
+      <div><span style="color:#cc44ff">E</span> Esqueleto — 2 HP, rápido, 8 dmg</div>
+      <div><span style="color:#ff8800">G</span> Goblin — 3 HP, lento, 15 dmg</div>
+    </div>
+  </div>
+  <div class="opt-actions" style="margin-top:20px">
+    <button class="opt-btn" id="btn-howto-back">← VOLVER</button>
+    <button class="opt-btn primary" id="btn-howto-play">▶ JUGAR</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     SCREEN 4 · MULTIPLAYER LOBBY
+════════════════════════════════════════ -->
+<!-- ══════════════════════════════════
+     SCREEN 4 · MULTIPLAYER LOBBY
+══════════════════════════════════ -->
+<div id="screen-mp" class="menu-screen hidden">
+  <div class="mp-title">⚡ MULTIJUGADOR</div>
+  <div class="mp-sub">WebRTC · Peer-to-peer · Sin servidor · 2 jugadores</div>
+
+  <div class="mp-panel">
+
+    <!-- Role toggle -->
+    <div class="mp-role-group">
+      <button class="mp-role-btn sel" id="mp-host-btn">
+        <span class="ri">🏰</span> ANFITRIÓN
+        <span class="rs">Crea la sala</span>
+      </button>
+      <button class="mp-role-btn" id="mp-guest-btn">
+        <span class="ri">🗡️</span> INVITADO
+        <span class="rs">Se une a sala</span>
+      </button>
+    </div>
+
+    <!-- Step progress dots -->
+    <div class="mp-steps">
+      <div class="mp-step active" id="mpS1">1</div>
+      <div class="mp-sline" id="mpL1"></div>
+      <div class="mp-step" id="mpS2">2</div>
+      <div class="mp-sline" id="mpL2"></div>
+      <div class="mp-step" id="mpS3">✓</div>
+    </div>
+
+    <!-- HOST FLOW -->
+    <div id="mp-host-flow">
+      <div class="mp-sect hi">Paso 1 — Tu código de sala</div>
+      <div class="mp-code-box placeholder" id="mp-offer-box">Generando código de sala…</div>
+      <button class="mp-btn go" id="mp-copy-offer" disabled>📋 Copiar código</button>
+
+      <div class="mp-sect" style="margin-top:14px">Paso 2 — Pega la respuesta del invitado</div>
+      <textarea class="mp-paste" id="mp-answer-input"
+        placeholder="Pega aquí el código que te envíe el invitado…" rows="3"></textarea>
+      <button class="mp-btn ok" id="mp-connect-host" disabled>🔗 Conectar y jugar</button>
+    </div>
+
+    <!-- GUEST FLOW -->
+    <div id="mp-guest-flow" style="display:none">
+      <div class="mp-sect hi">Paso 1 — Pega el código del anfitrión</div>
+      <textarea class="mp-paste" id="mp-offer-input"
+        placeholder="Pega aquí el código del anfitrión…" rows="3"></textarea>
+      <button class="mp-btn go" id="mp-gen-answer" disabled>⚡ Generar mi respuesta</button>
+
+      <div class="mp-sect" style="margin-top:14px">Paso 2 — Copia y envía al anfitrión</div>
+      <div class="mp-code-box placeholder" id="mp-answer-box">Aparecerá aquí tras el paso 1…</div>
+      <button class="mp-btn ok" id="mp-copy-answer" disabled>📋 Copiar respuesta</button>
+
+      <div id="mp-guest-wait" style="display:none;
+        font-family:'Share Tech Mono',monospace;font-size:0.54rem;color:#1a6a4a;
+        text-align:center;margin-top:10px;animation:blink 1s step-start infinite">
+        ⏳ Esperando que el anfitrión confirme la conexión…
+      </div>
+    </div>
+
+    <!-- Spinner -->
+    <div id="mp-radar" style="display:none;align-items:center;gap:10px;margin-top:10px;
+      font-family:'Share Tech Mono',monospace;font-size:0.52rem;color:#1a7070;letter-spacing:0.2em">
+      <div class="mp-ring"></div>
+      <span>Estableciendo conexión P2P…</span>
+    </div>
+
+    <!-- Status message -->
+    <div class="mp-sl mp-wait" id="mp-status">Elige tu rol para empezar</div>
+
+    <!-- Hints -->
+    <div class="mp-hint">En partida: <b style="color:#1a6060">G</b> chat · <b style="color:#1a6060">F1–F4</b> mensajes rápidos · <b style="color:#1a6060">TAB</b> mapa</div>
+
+    <button class="mp-btn back" id="mp-back-btn">← Volver al menú</button>
+  </div>
+</div>
+
+<h1>⚔ DUNGEON ⚔</h1>
+<div id="stats">
+  HP: <span id="hp">100</span> &nbsp;|&nbsp;
+  <span id="weapon-hud">Sin armas</span> &nbsp;|&nbsp;
+  KILLS: <span id="score">0</span> &nbsp;|&nbsp;
+  <span id="diff-label" style="opacity:0.6"></span>
+  <span id="peer-status" style="display:none;color:#00cfff;margin-left:6px">⚡ P2</span>
+  <span id="mp-latency" style="display:none;margin-left:4px;font-size:0.55rem"></span>
+</div>
+<!-- In-game peer HUD -->
+<div id="peer-hud">
+  <span style="color:#00cfff55;font-size:0.55rem">P2</span>
+  <div id="peer-hp-wrap"><div id="peer-hp-bar" style="width:100%"></div></div>
+  <span id="peer-hp-txt">100/100</span>
+  <span style="color:#1a5a5a">·</span>
+  <span id="peer-weapon-txt" style="font-size:0.5rem;color:#2a7a7a"></span>
+  <span style="color:#1a5a5a">·</span>
+  <span id="peer-kills-txt">0K</span>
+  <span id="peer-dist-txt" style="margin-left:2px"></span>
+</div>
+
+<div id="map-container">
+  <canvas id="canvas"></canvas>
+  <div id="peer-arrow"></div>
+</div>
+<div id="msg"></div>
+
+<!-- Minimap (TAB) -->
+<div id="mp-minimap">
+  <canvas id="mp-minimap-canvas" width="120" height="120"></canvas>
+  <div id="mp-minimap-label">🔴 TÚ &nbsp; 🔵 ALIADO</div>
+</div>
+
+<!-- Quick chat (G key or tap) -->
+<div id="quick-chat">
+  <div style="font-family:'Share Tech Mono',monospace;font-size:0.48rem;color:#1a5050;text-align:center;padding:2px 0 6px;letter-spacing:0.15em">CHAT RÁPIDO</div>
+  <button class="qchat-btn" data-msg="⚔ ¡Enemigos aquí!">⚔ Enemigos aquí</button>
+  <button class="qchat-btn" data-msg="🆘 ¡Necesito ayuda!">🆘 Necesito ayuda</button>
+  <button class="qchat-btn" data-msg="→ ¡Sígueme!">→ Sígueme</button>
+  <button class="qchat-btn" data-msg="🧪 ¡Pociones cerca!">🧪 Pociones cerca</button>
+  <div style="font-family:'Share Tech Mono',monospace;font-size:0.44rem;color:#0e3a3a;text-align:center;margin-top:6px">F1–F4 sin abrir menú</div>
+</div>
+
+
+<div id="controls">
+  <!-- Help button always visible -->
+  <button id="btn-help" title="Ayuda">?</button>
+
+  <!-- Touch controls: only shown in mobile mode -->
+  <div id="touch-controls" style="display:flex;flex-direction:column;align-items:center;gap:0">
+    <div id="dpad">
+      <div></div>
+      <button class="dpad-btn" id="dbtn-w" title="Arriba">▲</button>
+      <div></div>
+      <button class="dpad-btn" id="dbtn-a" title="Izquierda">◀</button>
+      <div class="dpad-btn dpad-center">@</div>
+      <button class="dpad-btn" id="dbtn-d" title="Derecha">▶</button>
+      <div></div>
+      <button class="dpad-btn" id="dbtn-s" title="Abajo">▼</button>
+      <div></div>
+    </div>
+    <button id="btn-fire">💥 DISPARAR</button>
+  </div>
+</div>
+
+<!-- Help modal -->
+<div id="help-overlay">
+  <div id="help-panel">
+    <button id="help-close">✕</button>
+    <div id="help-title">⚔ GUÍA DE JUEGO ⚔</div>
+    <div class="help-section">MOVIMIENTO</div>
+    <div class="help-row"><kbd>W A S D</kbd> <span>Mover al jugador</span></div>
+    <div class="help-row"><kbd>ESPACIO</kbd> <span>Disparar en la dirección que miras</span></div>
+    <div class="help-row"><kbd>1 – 5</kbd> <span>Cambiar arma activa</span></div>
+    <div class="help-row"><kbd>R</kbd> <span>Reiniciar (tras Game Over)</span></div>
+    <div class="help-section">SALUD</div>
+    <div class="help-row"><span style="color:#ff4466">+</span> <span>Poción — recupera 20 HP</span></div>
+    <div class="help-row"><span style="color:#ff2244">♥</span> <span>Corazón — +50 HP y sube el HP máximo</span></div>
+    <div class="help-row"><span style="color:#c8860a">☕</span> <span>Café mágico — recupera 8 HP</span></div>
+    <div class="help-row"><span style="color:#44ff88">💚</span> <span>Regeneración pasiva: +1 HP cada 15 pasos</span></div>
+    <div class="help-row"><span style="color:#ffd700">🎲</span> <span>Enemigos tienen 35% de probabilidad de soltar una poción al morir</span></div>
+    <div class="help-section">MAPA</div>
+    <div class="help-row"><span style="color:#1a5570">~</span> <span>Agua — te quita 5 HP al cruzar</span></div>
+    <div class="help-row"><span style="color:#3a7a2a">T</span> <span>Bosque — ralentiza; balas lo destruyen</span></div>
+    <div class="help-row"><span style="color:#cc44ff">E</span> <span>Esqueleto — 2 HP, rápido, 8 dmg</span></div>
+    <div class="help-row"><span style="color:#ff8800">G</span> <span>Goblin — 3 HP, lento, 15 dmg</span></div>
+    <div class="help-section">ARMAS</div>
+    <div class="help-row"><span style="color:#ffd700">W</span> <span>Pistola — bala estándar, 1 dmg</span></div>
+    <div class="help-row"><span style="color:#00cfff">R</span> <span>Rifle — bala rápida y penetrante, 2 dmg</span></div>
+    <div class="help-row"><span style="color:#ff6600">S</span> <span>Escopeta — 5 balas en abanico, 1 dmg c/u</span></div>
+    <div class="help-row"><span style="color:#ff44aa">B</span> <span>Bazuka — proyectil lento, 3 dmg</span></div>
+    <div class="help-row"><span style="color:#44ff88">M</span> <span>Metralleta — ráfaga de 3 balas, 1 dmg c/u</span></div>
+    <div class="help-tip">Recoger la misma arma recarga su munición.<br>Golpea enemigos en melee moviéndote hacia ellos.</div>
+  </div>
+</div>
+
+
+<button id="btn-regen">[ NUEVO MUNDO ]</button>
+<button id="btn-change-mode">[ CAMBIAR MODO ]</button>
+
+<script>
+// ── CONFIG ──────────────────────────────────────────────
+const CELL   = 18;
+const VIEW_W = 49;   // visible columns (odd)
+const VIEW_H = 27;   // visible rows (odd)
+const CHUNK  = 16;   // chunk side in cells
+const HVW    = (VIEW_W - 1) / 2;
+const HVH    = (VIEW_H - 1) / 2;
+
+const canvas = document.getElementById('canvas');
+const ctx    = canvas.getContext('2d');
+canvas.width  = VIEW_W * CELL;
+canvas.height = VIEW_H * CELL;
+
+// ── STATE ───────────────────────────────────────────────
+let world      = new Map();
+let playerX    = 0, playerY = 0;
+let playerDir  = { dx: 1, dy: 0 };
+let steps = 0, hp = 100, maxHp = 100;
+let bullets    = [];
+let enemies    = [];
+let score      = 0;
+let gameOver   = false;
+let masterSeed = Date.now() & 0xffffff;
+let regenSteps = 0;
+
+// Multiplayer peer state
+let mpPeer     = null;   // { x, y, hp, maxHp, score } — remote player
+let mpChannel  = null;   // RTCDataChannel
+let mpConn     = null;   // RTCPeerConnection
+let mpRole     = 'host'; // 'host' | 'guest'
+let mpConnected = false;
+
+// ── RNG ─────────────────────────────────────────────────
+function makeRng(seed) {
+  let s = seed | 0;
+  return () => {
+    s = (Math.imul(s, 1664525) + 1013904223) | 0;
+    return (s >>> 0) / 0x100000000;
+  };
+}
+
+function chunkSeed(cx, cy) {
+  let s = masterSeed ^ (cx * 374761393) ^ (cy * 1103515245);
+  s = ((s ^ (s >>> 16)) * 0x45d9f3b) | 0;
+  s = ((s ^ (s >>> 16)) * 0x45d9f3b) | 0;
+  return (s ^ (s >>> 16)) | 0;
+}
+
+// Border exit positions: deterministic per EDGE shared between two chunks.
+// For a horizontal edge between chunk (cx,cy) top and (cx,cy-1) bottom → seed from cx and cy.
+// Returns 2–3 column positions that are always open on that edge.
+function edgeExits(edgeSeed, size) {
+  const rng = makeRng(edgeSeed);
+  const count = 2 + (rng() < 0.4 ? 1 : 0);
+  const exits = new Set();
+  while (exits.size < count) {
+    exits.add(2 + Math.floor(rng() * (size - 4)));
+  }
+  return [...exits];
+}
+
+// ── CHUNK GEN ───────────────────────────────────────────
+function generateChunk(cx, cy) {
+  const rng   = makeRng(chunkSeed(cx, cy));
+  const C     = CHUNK;
+  const chunk = Array.from({ length: C }, () => Array(C).fill('#'));
+
+  // ── 1. BSP rooms ─────────────────────────────────────
+  const rooms = [];
+
+  function splitNode(x, y, w, h, depth) {
+    const minRoom = 4;
+    if (w < minRoom * 2 + 1 && h < minRoom * 2 + 1) {
+      // Leaf: carve a room
+      const rw = minRoom + Math.floor(rng() * Math.max(1, w - minRoom - 1));
+      const rh = minRoom + Math.floor(rng() * Math.max(1, h - minRoom - 1));
+      const rx = x + 1 + Math.floor(rng() * Math.max(1, w - rw - 1));
+      const ry = y + 1 + Math.floor(rng() * Math.max(1, h - rh - 1));
+      const room = { x: rx, y: ry, w: rw, h: rh,
+                     cx: rx + Math.floor(rw/2), cy: ry + Math.floor(rh/2) };
+      rooms.push(room);
+      for (let ry2 = ry; ry2 < ry + rh && ry2 < C; ry2++)
+        for (let rx2 = rx; rx2 < rx + rw && rx2 < C; rx2++)
+          chunk[ry2][rx2] = '.';
+      return room;
+    }
+    // Split axis: prefer the longer side
+    const splitH = (w >= h && w >= minRoom * 2 + 1)
+                    ? true
+                    : (h >= minRoom * 2 + 1 ? false : true);
+    if (splitH && w >= minRoom * 2 + 1) {
+      const split = minRoom + Math.floor(rng() * (w - minRoom * 2));
+      const a = splitNode(x,         y, split,     h, depth + 1);
+      const b = splitNode(x + split, y, w - split, h, depth + 1);
+      if (a && b) carveCorridor(a.cx, a.cy, b.cx, b.cy, chunk, rng);
+      return a || b;
+    } else if (h >= minRoom * 2 + 1) {
+      const split = minRoom + Math.floor(rng() * (h - minRoom * 2));
+      const a = splitNode(x, y,         w, split,     depth + 1);
+      const b = splitNode(x, y + split, w, h - split, depth + 1);
+      if (a && b) carveCorridor(a.cx, a.cy, b.cx, b.cy, chunk, rng);
+      return a || b;
+    }
+    return null;
+  }
+
+  splitNode(0, 0, C, C, 0);
+
+  // ── 2. Border corridors (guaranteed exits on each edge) ──
+  // Edge seeds MUST be identical for both chunks sharing that edge.
+  // Horizontal edge between row cy and cy-1: use cy (the lower chunk's cy) as anchor.
+  // Vertical edge between col cx and cx-1: use cx (the right chunk's cx) as anchor.
+  const topSeed    = chunkSeed(cx, cy)   ^ 0xABCD1234;  // top edge of this chunk = bottom edge of (cx, cy-1)
+  const bottomSeed = chunkSeed(cx, cy+1) ^ 0xABCD1234;  // bottom edge of this chunk = top edge of (cx, cy+1)
+  const leftSeed   = chunkSeed(cx, cy)   ^ 0xDEAD5678;  // left edge of this chunk = right edge of (cx-1, cy)
+  const rightSeed  = chunkSeed(cx+1, cy) ^ 0xDEAD5678;  // right edge of this chunk = left edge of (cx+1, cy)
+
+  function carveExit(exits, isVertical, border) {
+    for (const pos of exits) {
+      if (isVertical) {
+        // pos is column, border is row (0 or C-1)
+        chunk[border][pos] = '.';
+        // carve inward 3 cells to connect to interior
+        const dir = border === 0 ? 1 : -1;
+        for (let i = 0; i < 4; i++) {
+          const r = border + dir * i;
+          if (r >= 0 && r < C) chunk[r][pos] = '.';
+        }
+        // connect this exit to nearest room center
+        if (rooms.length) {
+          const nearest = rooms.reduce((best, rm) =>
+            Math.abs(rm.cx - pos) < Math.abs(best.cx - pos) ? rm : best, rooms[0]);
+          carveCorridor(pos, border + dir * 3, nearest.cx, nearest.cy, chunk, rng);
+        }
+      } else {
+        // pos is row, border is column (0 or C-1)
+        chunk[pos][border] = '.';
+        const dir = border === 0 ? 1 : -1;
+        for (let i = 0; i < 4; i++) {
+          const c = border + dir * i;
+          if (c >= 0 && c < C) chunk[pos][c] = '.';
+        }
+        if (rooms.length) {
+          const nearest = rooms.reduce((best, rm) =>
+            Math.abs(rm.cy - pos) < Math.abs(best.cy - pos) ? rm : best, rooms[0]);
+          carveCorridor(border + dir * 3, pos, nearest.cx, nearest.cy, chunk, rng);
+        }
+      }
+    }
+  }
+
+  carveExit(edgeExits(topSeed,    C), true,  0);
+  carveExit(edgeExits(bottomSeed, C), true,  C - 1);
+  carveExit(edgeExits(leftSeed,   C), false, 0);
+  carveExit(edgeExits(rightSeed,  C), false, C - 1);
+
+  // ── 3. Decorations ────────────────────────────────────
+  // Water patches (only inside floor)
+  for (let i = 0; i < 2; i++) {
+    const wcx = 2 + Math.floor(rng() * (C - 4));
+    const wcy = 2 + Math.floor(rng() * (C - 4));
+    const r   = 1 + Math.floor(rng() * 2);
+    for (let y = wcy - r; y <= wcy + r; y++)
+      for (let x = wcx - r; x <= wcx + r; x++)
+        if (y > 0 && y < C-1 && x > 0 && x < C-1
+            && chunk[y][x] === '.' && (x-wcx)**2+(y-wcy)**2 <= r*r)
+          chunk[y][x] = '~';
+  }
+
+  // Forest clusters
+  for (let i = 0; i < 3 + Math.floor(rng() * 3); i++) {
+    const fcx = 1 + Math.floor(rng() * (C - 2));
+    const fcy = 1 + Math.floor(rng() * (C - 2));
+    for (let j = 0; j < 5; j++) {
+      const tx = fcx + Math.floor(rng() * 3) - 1;
+      const ty = fcy + Math.floor(rng() * 3) - 1;
+      if (ty > 0 && ty < C-1 && tx > 0 && tx < C-1 && chunk[ty][tx] === '.')
+        chunk[ty][tx] = 'T';
+    }
+  }
+
+  // Weapon item (random type)
+  {
+    const types = Object.keys(WEAPON_DEFS);
+    if (rng() < 0.55) {
+      for (let attempt = 0; attempt < 40; attempt++) {
+        const wx = 1 + Math.floor(rng() * (C - 2));
+        const wy = 1 + Math.floor(rng() * (C - 2));
+        if (chunk[wy][wx] === '.') {
+          chunk[wy][wx] = types[Math.floor(rng() * types.length)];
+          break;
+        }
+      }
+    }
+  }
+
+  // Health items: potion '+', heart '♥', coffee '☕'
+  {
+    const healthItems = ['+', '+', '+', '♥', '☕']; // '+' most common
+    const count = rng() < 0.7 ? 1 : 2;
+    for (let i = 0; i < count; i++) {
+      if (rng() < 0.65) {
+        for (let attempt = 0; attempt < 40; attempt++) {
+          const hx = 1 + Math.floor(rng() * (C - 2));
+          const hy = 1 + Math.floor(rng() * (C - 2));
+          if (chunk[hy][hx] === '.') {
+            chunk[hy][hx] = healthItems[Math.floor(rng() * healthItems.length)];
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  return chunk;
+}
+
+// Carve an L-shaped corridor between two points
+function carveCorridor(x1, y1, x2, y2, chunk, rng) {
+  const C = CHUNK;
+  // Randomly go horizontal-then-vertical or vertical-then-horizontal
+  if (rng() < 0.5) {
+    for (let x = Math.min(x1,x2); x <= Math.max(x1,x2); x++)
+      if (y1 >= 0 && y1 < C && x >= 0 && x < C && chunk[y1][x] === '#') chunk[y1][x] = '.';
+    for (let y = Math.min(y1,y2); y <= Math.max(y1,y2); y++)
+      if (y >= 0 && y < C && x2 >= 0 && x2 < C && chunk[y][x2] === '#') chunk[y][x2] = '.';
+  } else {
+    for (let y = Math.min(y1,y2); y <= Math.max(y1,y2); y++)
+      if (y >= 0 && y < C && x1 >= 0 && x1 < C && chunk[y][x1] === '#') chunk[y][x1] = '.';
+    for (let x = Math.min(x1,x2); x <= Math.max(x1,x2); x++)
+      if (y2 >= 0 && y2 < C && x >= 0 && x < C && chunk[y2][x] === '#') chunk[y2][x] = '.';
+  }
+}
+
+// ── WORLD ACCESS ────────────────────────────────────────
+function toChunkCoords(wx, wy) {
+  const cx = Math.floor(wx / CHUNK), cy = Math.floor(wy / CHUNK);
+  const lx = ((wx % CHUNK) + CHUNK) % CHUNK;
+  const ly = ((wy % CHUNK) + CHUNK) % CHUNK;
+  return { cx, cy, lx, ly };
+}
+
+function getOrGen(cx, cy) {
+  const k = `${cx},${cy}`;
+  if (!world.has(k)) world.set(k, generateChunk(cx, cy));
+  return world.get(k);
+}
+
+function getCell(wx, wy) {
+  const { cx, cy, lx, ly } = toChunkCoords(wx, wy);
+  return getOrGen(cx, cy)[ly][lx];
+}
+
+function setCell(wx, wy, val) {
+  const { cx, cy, lx, ly } = toChunkCoords(wx, wy);
+  getOrGen(cx, cy)[ly][lx] = val;
+}
+
+// Pre-generate surrounding chunks to avoid stuttering
+function pregenAround(wx, wy) {
+  const halfCX = Math.ceil(HVW / CHUNK) + 2;
+  const halfCY = Math.ceil(HVH / CHUNK) + 2;
+  const baseCX = Math.floor(wx / CHUNK);
+  const baseCY = Math.floor(wy / CHUNK);
+  for (let cy = baseCY - halfCY; cy <= baseCY + halfCY; cy++)
+    for (let cx = baseCX - halfCX; cx <= baseCX + halfCX; cx++)
+      getOrGen(cx, cy);
+}
+
+// ── RENDER ──────────────────────────────────────────────
+const COLORS = {
+  '#': '#4a6a4a', '.': '#1a2a1a', '~': '#1a5570',
+  'T': '#3a7a2a',
+  // weapons on ground
+  'W': '#ffd700', 'R': '#00cfff', 'S': '#ff6600', 'B': '#ff44aa', 'M': '#44ff88',
+  // health items
+  '+': '#ff4466', '♥': '#ff2244', '☕': '#c8860a',
+  // player & enemies
+  '@': '#ff4444', 'P': '#00cfff', 'E': '#cc44ff', 'G': '#ff8800',
+  // bullets
+  '-': '#ffee00', '=': '#00cfff', '*': '#ff9933', 'o': '#ff44aa', '·': '#88ffaa',
+};
+const GLOW = {
+  '@': { color: '#ff222255', blur: 14 },
+  'P': { color: '#00cfff66', blur: 14 },
+  'W': { color: '#ffd70055', blur: 8  },
+  'R': { color: '#00cfff55', blur: 8  },
+  'S': { color: '#ff660055', blur: 8  },
+  'B': { color: '#ff44aa55', blur: 10 },
+  'M': { color: '#44ff8855', blur: 8  },
+  '+': { color: '#ff446699', blur: 12 },
+  '♥': { color: '#ff2244cc', blur: 16 },
+  '☕': { color: '#c8860a88', blur: 8  },
+  '-': { color: '#ffee0099', blur: 8  },
+  '=': { color: '#00cfff99', blur: 10 },
+  '*': { color: '#ff993399', blur: 6  },
+  'o': { color: '#ff44aacc', blur: 14 },
+  '·': { color: '#88ffaa88', blur: 4  },
+  '~': { color: '#1a557066', blur: 4  },
+  'E': { color: '#cc44ff66', blur: 10 },
+  'G': { color: '#ff880066', blur: 8  },
+};
+
+function render() {
+  ctx.fillStyle = '#060a06';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.font = `bold ${CELL - 1}px VT323, monospace`;
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'middle';
+
+  const bulletSet = new Set(); // kept for compatibility
+  const enemyMap  = new Map(enemies.map(e => [`${e.x},${e.y}`, e]));
+
+  for (let vy = 0; vy < VIEW_H; vy++) {
+    for (let vx = 0; vx < VIEW_W; vx++) {
+      const wx = playerX + (vx - HVW);
+      const wy = playerY + (vy - HVH);
+      const px = vx * CELL + CELL / 2;
+      const py = vy * CELL + CELL / 2;
+
+      let ch;
+      const enemy = enemyMap.get(`${wx},${wy}`);
+      const bullet = [...bullets, ...(mpPeer ? mpPeer.bullets : [])].find(b => b.x === wx && b.y === wy);
+      const isPeer = mpPeer && wx === mpPeer.x && wy === mpPeer.y;
+      if (wx === playerX && wy === playerY) ch = '@';
+      else if (isPeer)    ch = 'P';
+      else if (enemy)     ch = enemy.type;
+      else if (bullet)    ch = bullet.sym || '-';
+      else                ch = getCell(wx, wy);
+
+      const g = GLOW[ch];
+      if (g) { ctx.shadowColor = g.color; ctx.shadowBlur = g.blur; }
+      else     ctx.shadowBlur = 0;
+
+      ctx.fillStyle = COLORS[ch] || '#2a3a2a';
+      ctx.fillText(ch, px, py);
+
+      // HP bar for visible enemies
+      if (enemy) {
+        const maxHp = enemy.type === 'E' ? 2 : 3;
+        const barW  = CELL - 2;
+        const filled = Math.round((enemy.hp / maxHp) * barW);
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#300';
+        ctx.fillRect(px - barW/2, py + 7, barW, 2);
+        ctx.fillStyle = enemy.hp === maxHp ? '#0f0' : '#f80';
+        ctx.fillRect(px - barW/2, py + 7, filled, 2);
+      }
+    }
+  }
+
+  ctx.shadowBlur = 0;
+
+  // Game over overlay
+  if (gameOver) {
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.shadowColor = '#ff4444'; ctx.shadowBlur = 30;
+    ctx.fillStyle = '#ff4444';
+    ctx.font = `bold 52px VT323, monospace`;
+    ctx.fillText('GAME OVER', canvas.width/2, canvas.height/2 - 20);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#ffd700';
+    ctx.font = `bold 24px VT323, monospace`;
+    ctx.fillText(`KILLS: ${score}  |  Pulsa R para reiniciar`, canvas.width/2, canvas.height/2 + 20);
+  }
+}
+
+// ── STATS ───────────────────────────────────────────────
+function updateStats() {
+  const hpEl = document.getElementById('hp');
+  hpEl.textContent = `${hp}/${maxHp}`;
+  hpEl.style.color = hp > maxHp * 0.6 ? '#88ff88' : hp > maxHp * 0.3 ? '#ffaa00' : '#ff4444';
+  document.getElementById('score').textContent = score;
+  const dl = document.getElementById('diff-label');
+  if (dl) dl.textContent = diff().label;
+
+  const hud = document.getElementById('weapon-hud');
+  if (inventory.length === 0) {
+    hud.textContent = 'Sin armas';
+    hud.style.color = '#556655';
+  } else {
+    hud.innerHTML = inventory.map((w, i) => {
+      const def   = WEAPON_DEFS[w.type];
+      const active = i === activeSlot;
+      const color  = active ? def.color : '#446644';
+      const border = active ? `text-decoration:underline;font-weight:bold` : '';
+      return `<span style="color:${color};${border}">[${i+1}]${def.sym}×${w.ammo}</span>`;
+    }).join(' ');
+  }
+}
+
+function showMsg(txt, duration = 1500) {
+  const el = document.getElementById('msg');
+  el.textContent = txt;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.textContent = '', duration);
+}
+
+function flashKey(k) {
+  const el = document.getElementById('key-' + k);
+  if (!el) return;
+  el.classList.add('active');
+  setTimeout(() => el.classList.remove('active'), 150);
+}
+
+// ── WEAPON SYSTEM ───────────────────────────────────────
+// Each weapon type: symbol shown on map, bullet symbol, dmg, bullets per shot, speed, color, name
+const WEAPON_DEFS = {
+  'W': { name: 'Pistola',    sym: 'W', bSym: '-', dmg: 1, shots: 1, bSpeed: 110, spread: 0,  color: '#ffd700', bColor: '#ffee00', glow: '#ffd70066' },
+  'R': { name: 'Rifle',      sym: 'R', bSym: '=', dmg: 2, shots: 1, bSpeed: 60,  spread: 0,  color: '#00cfff', bColor: '#00cfff', glow: '#00cfff55' },
+  'S': { name: 'Escopeta',   sym: 'S', bSym: '*', dmg: 1, shots: 5, bSpeed: 130, spread: 2,  color: '#ff6600', bColor: '#ff9933', glow: '#ff660055' },
+  'B': { name: 'Bazuka',     sym: 'B', bSym: 'o', dmg: 3, shots: 1, bSpeed: 180, spread: 0,  color: '#ff44aa', bColor: '#ff44aa', glow: '#ff44aa66' },
+  'M': { name: 'Metralleta', sym: 'M', bSym: '.', dmg: 1, shots: 3, bSpeed: 80,  spread: 1,  color: '#44ff88', bColor: '#88ffaa', glow: '#44ff8855' },
+};
+
+// Weapon pool items on the ground: { x, y, type }
+let weaponItems = [];
+// Player inventory: { type, ammo }
+let inventory   = [];   // array of { type, ammo }
+let activeSlot  = 0;    // index into inventory
+
+function activeWeapon() { return inventory[activeSlot] || null; }
+
+function pickupWeapon(wx, wy, type) {
+  // Check if already carrying this type
+  const existing = inventory.find(w => w.type === type);
+  if (existing) {
+    existing.ammo += WEAPON_DEFS[type].shots * 4;
+    showMsg(`🔄 ${WEAPON_DEFS[type].name} recargada! +${WEAPON_DEFS[type].shots * 4} balas`);
+  } else {
+    inventory.push({ type, ammo: WEAPON_DEFS[type].shots * 6 });
+    showMsg(`🎯 Recogiste ${WEAPON_DEFS[type].name}! [${inventory.length - 1 + 1}]`);
+  }
+  // Remove from ground
+  weaponItems = weaponItems.filter(w => !(w.x === wx && w.y === wy));
+}
+
+// Place weapon items during chunk gen
+function placeWeaponItem(cx, cy, chunk, rng) {
+  const C     = CHUNK;
+  const types = Object.keys(WEAPON_DEFS);
+  if (rng() < 0.55) {
+    for (let attempt = 0; attempt < 40; attempt++) {
+      const wx = 1 + Math.floor(rng() * (C - 2));
+      const wy = 1 + Math.floor(rng() * (C - 2));
+      if (chunk[wy][wx] === '.') {
+        const type = types[Math.floor(rng() * types.length)];
+        const worldX = cx * C + wx;
+        const worldY = cy * C + wy;
+        // Mark on map with weapon symbol
+        chunk[wy][wx] = type;
+        break;
+      }
+    }
+  }
+}
+const ENEMY_TYPES = {
+  E: { hp: 2, dmg: 8,  speed: 3, name: 'Esqueleto' },
+  G: { hp: 3, dmg: 15, speed: 5, name: 'Goblin'    },
+};
+
+// Spawn enemies near the player as they explore
+function spawnEnemiesAround(wx, wy) {
+  const SPAWN_RADIUS = 20;
+  const MIN_DIST     = 8;
+  const rng = makeRng((wx * 7919 + wy * 6271) ^ masterSeed);
+
+  // Only spawn if no enemy already near this position
+  if (rng() > diff().spawnChance) return;
+
+  const type = rng() < 0.6 ? 'E' : 'G';
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const angle = rng() * Math.PI * 2;
+    const dist  = MIN_DIST + Math.floor(rng() * (SPAWN_RADIUS - MIN_DIST));
+    const ex    = Math.round(wx + Math.cos(angle) * dist);
+    const ey    = Math.round(wy + Math.sin(angle) * dist);
+    const cell  = getCell(ex, ey);
+    if (cell !== '.' && cell !== 'T') continue;
+    // Don't stack enemies
+    if (enemies.some(e => e.x === ex && e.y === ey)) continue;
+    enemies.push({ x: ex, y: ey, type, hp: Math.max(1, Math.round(ENEMY_TYPES[type].hp * diff().enemyHpMult)), cooldown: 0 });
+    break;
+  }
+
+  // Remove enemies too far from player (>40 tiles)
+  enemies = enemies.filter(e =>
+    Math.abs(e.x - playerX) <= 40 && Math.abs(e.y - playerY) <= 40
+  );
+}
+
+// Simple pathfinding: move one step toward player avoiding walls
+function stepToward(e) {
+  const dx = playerX - e.x, dy = playerY - e.y;
+  const absDx = Math.abs(dx), absDy = Math.abs(dy);
+
+  // Try primary axis first, then secondary
+  const moves = [];
+  if (absDx > absDy) {
+    moves.push([Math.sign(dx), 0], [0, Math.sign(dy)], [Math.sign(dx), Math.sign(dy)]);
+  } else {
+    moves.push([0, Math.sign(dy)], [Math.sign(dx), 0], [Math.sign(dx), Math.sign(dy)]);
+  }
+
+  for (const [mdx, mdy] of moves) {
+    if (mdx === 0 && mdy === 0) continue;
+    const nx = e.x + mdx, ny = e.y + mdy;
+    const cell = getCell(nx, ny);
+    if (cell === '#') continue;
+    if (enemies.some(o => o !== e && o.x === nx && o.y === ny)) continue;
+    return { nx, ny };
+  }
+  return { nx: e.x, ny: e.y }; // stuck
+}
+
+let enemyTickCount = 0;
+function tickEnemies() {
+  if (gameOver) return;
+  enemyTickCount++;
+
+  for (const e of enemies) {
+    const stats = ENEMY_TYPES[e.type];
+    const dist  = Math.abs(e.x - playerX) + Math.abs(e.y - playerY);
+
+    // Only act if within sight range
+    if (dist > 22) continue;
+
+    e.cooldown = Math.max(0, e.cooldown - 1);
+    if (e.cooldown > 0) continue;
+
+    // Attack if adjacent
+    if (dist === 1) {
+      const actualDmg = Math.round(stats.dmg * diff().enemyDmgMult);
+      hp -= actualDmg;
+      showMsg(`💀 ${stats.name} te ataca! -${actualDmg} HP`);
+      e.cooldown = stats.speed + 1;
+      if (hp <= 0) { hp = 0; gameOver = true; }
+      updateStats();
+      render();
+      continue;
+    }
+
+    // Move toward player (slower goblins move every other tick)
+    if (e.type === 'G' && enemyTickCount % 2 !== 0) continue;
+    const { nx, ny } = stepToward(e);
+    e.x = nx; e.y = ny;
+    e.cooldown = stats.speed;
+  }
+
+  render();
+}
+
+setInterval(tickEnemies, 250);
+
+// ── MOVE ────────────────────────────────────────────────
+function move(dx, dy) {
+  if (gameOver) return;
+  playerDir = { dx, dy };
+  const nx = playerX + dx, ny = playerY + dy;
+
+  pregenAround(nx, ny);
+
+  // Check if enemy is blocking
+  const enemyIdx = enemies.findIndex(e => e.x === nx && e.y === ny);
+  if (enemyIdx !== -1) {
+    // Melee bump attack — costs no ammo
+    const e = enemies[enemyIdx];
+    e.hp--;
+    showMsg(`⚔ Golpeas al ${ENEMY_TYPES[e.type].name}! (${e.hp} HP restante)`);
+    if (e.hp <= 0) {
+      const name = ENEMY_TYPES[e.type].name;
+      const ex = e.x, ey = e.y;
+      enemies.splice(enemyIdx, 1);
+      score++;
+      if (Math.random() < diff().lootChance) setCell(ex, ey, '+');
+      mpBroadcastEnemyDead(ex, ey);
+      showMsg(`💀 ${name} eliminado! +1 kill`);
+    }
+    updateStats();
+    render();
+    return;
+  }
+
+  const t = getCell(nx, ny);
+  if (t === '#') { showMsg('¡Muro bloqueado!'); render(); return; }
+  if (t === '~') {
+    const wd = diff().waterDmg;
+    if (wd > 0) { hp = Math.max(0, hp - wd); showMsg(`💧 El agua te daña -${wd} HP`); if (hp <= 0) { hp = 0; gameOver = true; } }
+    else { showMsg('💧 Cruzas el agua sin daño'); }
+  }
+  if (t === 'T') { showMsg('🌲 Cruzas el bosque...'); }
+  if (WEAPON_DEFS[t]) { pickupWeapon(nx, ny, t); setCell(nx, ny, '.'); }
+
+  // Health pickups
+  if (t === '+') {
+    const heal = 20;
+    hp = Math.min(maxHp, hp + heal);
+    setCell(nx, ny, '.');
+    if (mpConnected) mpSendCell(nx, ny, '.');
+    showMsg(`🧪 Poción! +${heal} HP (${hp}/${maxHp})`);
+  }
+  if (t === '♥') {
+    const heal = 50;
+    const oldMax = maxHp;
+    maxHp = Math.min(200, maxHp + 10);
+    hp = Math.min(maxHp, hp + heal);
+    setCell(nx, ny, '.');
+    if (mpConnected) mpSendCell(nx, ny, '.');
+    showMsg(`❤️ Corazón! +${heal} HP, MaxHP ${oldMax}→${maxHp}`);
+  }
+  if (t === '☕') {
+    const heal = 8;
+    hp = Math.min(maxHp, hp + heal);
+    setCell(nx, ny, '.');
+    if (mpConnected) mpSendCell(nx, ny, '.');
+    showMsg(`☕ Café mágico! +${heal} HP y energía`);
+  }
+
+  playerX = nx; playerY = ny;
+  steps++;
+  regenSteps++;
+
+  // Passive regen — rate comes from difficulty
+  const regenRate = diff().regenRate;
+  if (regenRate > 0 && regenSteps >= regenRate && hp < maxHp) {
+    hp = Math.min(maxHp, hp + 1);
+    regenSteps = 0;
+    showMsg(`💚 +1 HP regenerado (${hp}/${maxHp})`, 800);
+  } else if (regenSteps >= Math.max(regenRate, 1)) {
+    regenSteps = 0;
+  }
+
+  spawnEnemiesAround(playerX, playerY);
+  mpBroadcastState();
+  updateStats();
+  render();
+}
+
+// ── SHOOT ───────────────────────────────────────────────
+function shoot() {
+  if (gameOver) return;
+  const w = activeWeapon();
+  if (!w) { showMsg('⚠ Sin armas! Busca W R S B M en el mapa'); return; }
+  if (w.ammo <= 0) { showMsg(`⚠ ${WEAPON_DEFS[w.type].name} sin munición!`); return; }
+
+  const def = WEAPON_DEFS[w.type];
+  w.ammo--;
+
+  // Direction vectors for spread
+  const { dx, dy } = playerDir;
+  // Perpendicular direction
+  const px = dy, py = -dx;
+
+  for (let s = 0; s < def.shots; s++) {
+    // Spread offset: center shot at 0, others evenly spread around
+    const offset = def.shots === 1 ? 0 : s - Math.floor(def.shots / 2);
+    const bx = playerX + dx + px * offset;
+    const by = playerY + dy + py * offset;
+    bullets.push({
+      x: bx, y: by,
+      dx, dy,
+      sym: def.bSym,
+      dmg: def.dmg,
+      speed: def.bSpeed,
+      lastTick: 0,
+    });
+  }
+
+  // Auto-switch if empty
+  if (w.ammo <= 0) {
+    showMsg(`💨 ${def.name} vacía!`);
+    inventory.splice(activeSlot, 1);
+    if (activeSlot >= inventory.length) activeSlot = Math.max(0, inventory.length - 1);
+  } else {
+    showMsg(`💥 ${def.name}! (${w.ammo} balas)`, 600);
+  }
+
+  updateStats();
+  render();
+
+  const sp = document.getElementById('btn-fire');
+  if (sp) { sp.classList.add('active'); setTimeout(() => sp.classList.remove('active'), 150); }
+  mpBroadcastState();
+}
+
+let bulletTick = 0;
+function tickBullets() {
+  if (bullets.length === 0) return;
+  bulletTick++;
+  const next = [];
+  let changed = false;
+
+  for (const b of bullets) {
+    // Per-bullet speed throttle
+    const interval = Math.round(b.speed / 110);
+    if (interval > 1 && bulletTick % interval !== 0) { next.push(b); continue; }
+
+    const nx = b.x + b.dx, ny = b.y + b.dy;
+
+    // Enemy hit
+    const eIdx = enemies.findIndex(e => e.x === nx && e.y === ny);
+    if (eIdx !== -1) {
+      const e = enemies[eIdx];
+      e.hp -= b.dmg;
+      changed = true;
+      if (e.hp <= 0) {
+        const name = ENEMY_TYPES[e.type].name;
+        const ex = e.x, ey = e.y;
+        enemies.splice(eIdx, 1);
+        score++;
+        if (Math.random() < diff().lootChance) setCell(ex, ey, '+');
+        mpBroadcastEnemyDead(ex, ey);
+        updateStats();
+        showMsg(`💥 ${name} abatido! +1 kill`);
+      } else {
+        showMsg(`💥 Impacto en ${ENEMY_TYPES[e.type].name}! (${e.hp} HP)`);
+      }
+      continue;
+    }
+
+    const t = getCell(nx, ny);
+    if (t === '#') { changed = true; continue; }
+    if (t === 'T') { setCell(nx, ny, '.'); showMsg('🌲 ¡Árbol destruido!'); changed = true; continue; }
+    if (t === '~') { changed = true; continue; }
+    next.push({ ...b, x: nx, y: ny });
+    changed = true;
+  }
+  bullets = next;
+  if (changed) render();
+}
+
+setInterval(tickBullets, 110);
+
+// ── INPUT ───────────────────────────────────────────────
+// Ensure the page always captures keypresses regardless of what has focus
+window.addEventListener('keydown', e => {
+  if (!gameMode) return; // mode not selected yet
+  if (gameOver) {
+    if (e.key.toLowerCase() === 'r') reset();
+    return;
+  }
+  // Switch weapon slots with 1-5
+  if (['1','2','3','4','5'].includes(e.key)) {
+    const slot = parseInt(e.key) - 1;
+    if (slot < inventory.length) {
+      activeSlot = slot;
+      showMsg(`🔫 ${WEAPON_DEFS[inventory[slot].type].name} activa`);
+      updateStats(); render();
+    }
+    return;
+  }
+  if (e.key === ' ') { e.preventDefault(); shoot(); return; }
+  const key = e.key.toLowerCase();
+  if (!['w','a','s','d'].includes(key)) return;
+  e.preventDefault();
+  flashKey(key);
+  if (key === 'w') move( 0, -1);
+  if (key === 's') move( 0,  1);
+  if (key === 'a') move(-1,  0);
+  if (key === 'd') move( 1,  0);
+}, true); // capture phase so nothing can block it
+
+// ── RESET ───────────────────────────────────────────────
+function reset() {
+  masterSeed = Date.now() & 0xffffff;
+  world.clear();
+  playerX = 0; playerY = 0;
+  playerDir = { dx: 1, dy: 0 };
+  weapons = 0; steps = 0; hp = 100; maxHp = 100;
+  bullets = [];
+  enemies = [];
+  score    = 0;
+  gameOver  = false;
+  regenSteps = 0;
+  inventory  = [];
+  activeSlot = 0;
+
+  pregenAround(0, 0);
+
+  // Find a walkable starting cell near origin
+  let found = false;
+  outer: for (let r = 0; r <= 30; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.abs(dx) === r || Math.abs(dy) === r) {
+          if (getCell(dx, dy) === '.') {
+            playerX = dx; playerY = dy;
+            found = true; break outer;
+          }
+        }
+      }
+    }
+  }
+
+  updateStats();
+  render();
+  showMsg('✦ Mundo infinito generado — ¡explora sin límites! ✦');
+}
+
+
+// ── NAV helpers (defined before WebRTC block below) ──
+
+// ═══════════════════════════════════════════════════════
+//  MENU SYSTEM
+// ═══════════════════════════════════════════════════════
+let gameMode   = null;   // 'pc' | 'mobile'
+let difficulty = 'normal';
+
+const DIFF_PRESETS = {
+  baby:   { label:'🍼 BEBÉ',    spawnChance:0,    enemyHpMult:0.5, enemyDmgMult:0.3, regenRate:5,  lootChance:0.8,  waterDmg:0   },
+  easy:   { label:'🌿 FÁCIL',   spawnChance:0.2,  enemyHpMult:0.75,enemyDmgMult:0.5, regenRate:8,  lootChance:0.6,  waterDmg:3   },
+  normal: { label:'⚔ NORMAL',   spawnChance:0.35, enemyHpMult:1,   enemyDmgMult:1,   regenRate:15, lootChance:0.35, waterDmg:5   },
+  hard:   { label:'🔥 DIFÍCIL', spawnChance:0.55, enemyHpMult:1.5, enemyDmgMult:1.5, regenRate:30, lootChance:0.2,  waterDmg:10  },
+  hell:   { label:'💀 INFIERNO',spawnChance:0.75, enemyHpMult:2,   enemyDmgMult:2,   regenRate:0,  lootChance:0.1,  waterDmg:15  },
+};
+function diff() { return DIFF_PRESETS[difficulty]; }
+
+function showScreen(id) {
+  ['screen-main','screen-options','screen-howto','screen-mp'].forEach(s => {
+    document.getElementById(s).classList.toggle('hidden', s !== id);
+  });
+}
+
+function startGame() {
+  ['screen-main','screen-options','screen-howto','screen-mp'].forEach(s =>
+    document.getElementById(s).classList.add('hidden'));
+  document.getElementById('touch-controls').style.display =
+    gameMode === 'mobile' ? 'flex' : 'none';
+  reset();
+}
+
+function goToMenu() {
+  gameMode = null;
+  showScreen('screen-main');
+  document.getElementById('touch-controls').style.display = 'none';
+}
+
+// Main menu
+document.getElementById('btn-play').addEventListener('click', () => {
+  if (!gameMode) { showScreen('screen-options'); return; }
+  startGame();
+});
+document.getElementById('btn-mp').addEventListener('click', () => {
+  showScreen('screen-mp');
+  // Reset to host role by default
+  mpRole = 'host';
+  document.getElementById('mp-host-btn').classList.add('sel');
+  document.getElementById('mp-guest-btn').classList.remove('sel');
+  document.getElementById('mp-host-flow').style.display = 'block';
+  document.getElementById('mp-guest-flow').style.display = 'none';
+  // Reset boxes
+  const ob = document.getElementById('mp-offer-box');
+  ob.textContent = 'Generando oferta…'; ob.classList.add('placeholder');
+  mpStartHost();
+});
+document.getElementById('btn-options').addEventListener('click', () => showScreen('screen-options'));
+document.getElementById('btn-howto').addEventListener('click',   () => showScreen('screen-howto'));
+
+// Options device toggle
+document.getElementById('tog-pc').addEventListener('click', () => {
+  gameMode = 'pc';
+  document.getElementById('tog-pc').classList.add('sel');
+  document.getElementById('tog-mobile').classList.remove('sel');
+});
+document.getElementById('tog-mobile').addEventListener('click', () => {
+  gameMode = 'mobile';
+  document.getElementById('tog-mobile').classList.add('sel');
+  document.getElementById('tog-pc').classList.remove('sel');
+});
+
+// Difficulty cards
+document.querySelectorAll('.diff-card').forEach(card => {
+  card.addEventListener('click', () => {
+    document.querySelectorAll('.diff-card').forEach(c => c.classList.remove('sel'));
+    card.classList.add('sel');
+    difficulty = card.dataset.diff;
+  });
+});
+
+document.getElementById('btn-opts-back').addEventListener('click', () => showScreen('screen-main'));
+document.getElementById('btn-opts-play').addEventListener('click', () => {
+  if (!gameMode) gameMode = 'pc';
+  startGame();
+});
+document.getElementById('btn-howto-back').addEventListener('click', () => showScreen('screen-main'));
+document.getElementById('btn-howto-play').addEventListener('click', () => {
+  if (!gameMode) gameMode = 'pc';
+  startGame();
+});
+
+document.getElementById('btn-regen').addEventListener('click', reset);
+document.getElementById('btn-change-mode').addEventListener('click', goToMenu);
+
+// ── D-pad & fire ──
+document.getElementById('dbtn-w').addEventListener('click', () => { flashKey('w'); move( 0,-1); });
+document.getElementById('dbtn-s').addEventListener('click', () => { flashKey('s'); move( 0, 1); });
+document.getElementById('dbtn-a').addEventListener('click', () => { flashKey('a'); move(-1, 0); });
+document.getElementById('dbtn-d').addEventListener('click', () => { flashKey('d'); move( 1, 0); });
+document.getElementById('btn-fire').addEventListener('click', () => shoot());
+
+const helpOverlay = document.getElementById('help-overlay');
+document.getElementById('btn-help').addEventListener('click', () => helpOverlay.classList.toggle('open'));
+document.getElementById('help-close').addEventListener('click', () => helpOverlay.classList.remove('open'));
+helpOverlay.addEventListener('click', e => { if (e.target === helpOverlay) helpOverlay.classList.remove('open'); });
+
+// ═══════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════
+//  MULTIPLAYER v3  —  WebRTC P2P
+//  Mejoras: lobby claro, validación en tiempo real, HUD rico,
+//  minimap funcional, chat rápido, heartbeat, latencia en vivo,
+//  notificaciones de eventos del aliado, spawn inteligente
+// ═══════════════════════════════════════════════════════
+
+// ── MP state vars (declared in global state block above) ──
+// mpConn / mpChannel / mpRole / mpConnected / mpPeer are in global state
+
+let _mpLastPing  = 0;
+let _mpLatency   = 0;
+let _mpHeartbeat = null;
+let _mpSyncTimer = null;
+let _mpMinimapOn = false;
+let _mpChatOpen  = false;
+let _mpPrevPeerHp = 100;   // track HP drops for visual flash
+
+const MP_ICE = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+];
+
+const MP_QCHAT = [
+  { key:'F1', icon:'⚔', text:'¡Enemigos aquí!' },
+  { key:'F2', icon:'🆘', text:'¡Necesito ayuda!' },
+  { key:'F3', icon:'→',  text:'¡Sígueme!' },
+  { key:'F4', icon:'🧪', text:'¡Pociones cerca!' },
+];
+
+// ════════════════════════════════════════════════════════
+//  HELPERS
+// ════════════════════════════════════════════════════════
+
+function mpSt(msg, type = 'wait') {
+  const el = document.getElementById('mp-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'mp-sl mp-' + type;
+}
+
+function mpEncode(sdp) { return btoa(JSON.stringify(sdp)); }
+function mpDecode(s) {
+  try { return JSON.parse(atob(s.trim())); } catch { return null; }
+}
+
+function mpCopy(text, feedbackEl) {
+  navigator.clipboard?.writeText(text).catch(() => {
+    const ta = Object.assign(document.createElement('textarea'), { value: text });
+    document.body.appendChild(ta); ta.select();
+    document.execCommand('copy'); ta.remove();
+  });
+  if (feedbackEl) {
+    const orig = feedbackEl.textContent;
+    feedbackEl.textContent = '✅ ¡Copiado!';
+    setTimeout(() => { feedbackEl.textContent = orig; }, 1800);
+  }
+}
+
+function mpStep(n) {
+  [1,2,3].forEach(i => {
+    const s = document.getElementById('mpS'+i);
+    if (s) s.className = 'mp-step' + (i < n ? ' done' : i===n ? ' active' : '');
+    const l = document.getElementById('mpL'+i);
+    if (l && i <= 2) l.className = 'mp-sline' + (i < n ? ' done' : '');
+  });
+}
+
+// ════════════════════════════════════════════════════════
+//  PEER CONNECTION FACTORY
+// ════════════════════════════════════════════════════════
+
+function createPeer() {
+  if (mpConn) { try { mpConn.close(); } catch {} }
+  mpConn = new RTCPeerConnection({ iceServers: MP_ICE });
+
+  mpConn.oniceconnectionstatechange = () => {
+    const s = mpConn.iceConnectionState;
+    if (s === 'connected' || s === 'completed') {
+      mpEl('mp-radar').style.display = 'none';
+      mpSt('⚡ ¡Conexión establecida!', 'ok');
+      setTimeout(mpLaunch, 700);
+    } else if (s === 'disconnected') {
+      if (mpConnected) showMsg('⚠ Conexión inestable…', 2500);
+    } else if (s === 'failed' || s === 'closed') {
+      mpDisconnect();
+    }
+  };
+  return mpConn;
+}
+
+// ── Data channel ──
+function mpSetupChannel(ch) {
+  mpChannel = ch;
+
+  ch.onopen = () => {
+    _mpLastPing = Date.now();
+    _mpHeartbeat = setInterval(() => {
+      mpRawSend({ type: 'ping', t: Date.now() });
+      if (mpConnected && Date.now() - _mpLastPing > 9000) {
+        showMsg('⚠ Sin respuesta del aliado…', 2000);
+      }
+    }, 2500);
+  };
+
+  ch.onmessage = ({ data }) => {
+    try { mpHandleMsg(JSON.parse(data)); }
+    catch (e) { console.warn('[MP]', e); }
+  };
+
+  ch.onclose = mpDisconnect;
+}
+
+// ── Disconnect ──
+function mpDisconnect() {
+  const was = mpConnected;
+  clearInterval(_mpHeartbeat); clearInterval(_mpSyncTimer);
+  mpConnected = false; mpPeer = null;
+
+  ['peer-hud','peer-arrow','mp-minimap'].forEach(id => {
+    const el = mpEl(id); if (el) el.style.display = 'none';
+  });
+  mpEl('peer-status').style.display = 'none';
+  mpEl('mp-latency').style.display  = 'none';
+
+  if (was) { showMsg('❌ Aliado desconectado', 3000); render(); }
+}
+
+// ════════════════════════════════════════════════════════
+//  MESSAGE HANDLER
+// ════════════════════════════════════════════════════════
+
+function mpHandleMsg(msg) {
+  _mpLastPing = Date.now();
+
+  switch (msg.type) {
+    case 'ping':
+      mpRawSend({ type: 'pong', t: msg.t });
+      break;
+
+    case 'pong': {
+      _mpLatency = Math.max(1, Date.now() - msg.t);
+      const el = mpEl('mp-latency');
+      if (el) {
+        el.textContent = _mpLatency + 'ms';
+        el.style.color = _mpLatency < 80 ? '#44ff88' : _mpLatency < 200 ? '#ffd700' : '#ff4466';
+      }
+      break;
+    }
+
+    case 'seed':
+      masterSeed = msg.seed;
+      difficulty  = msg.diff || difficulty;
+      world.clear();
+      break;
+
+    case 'state': {
+      const prev = mpPeer ? mpPeer.hp : 100;
+      if (!mpPeer) mpPeer = {};
+      Object.assign(mpPeer, {
+        x: msg.x, y: msg.y,
+        hp: msg.hp, maxHp: msg.maxHp,
+        score: msg.score, dir: msg.dir || {dx:1,dy:0},
+        weapon: msg.weapon, bullets: msg.bullets || [],
+      });
+      // Flash if peer took damage
+      if (msg.hp < prev - 5) showMsg('⚡ ¡Aliado golpeado!', 900);
+      mpUpdateHUD();
+      mpUpdateArrow();
+      mpUpdateMinimap();
+      render();
+      break;
+    }
+
+    case 'cell':
+      setCell(msg.x, msg.y, msg.v);
+      render();
+      break;
+
+    case 'enemy_dead':
+      enemies = enemies.filter(e => !(e.x===msg.x && e.y===msg.y));
+      updateStats(); render();
+      break;
+
+    case 'chat':
+      showMsg(`💬 ${msg.text}`, 3500);
+      break;
+
+    case 'gameover':
+      showMsg(`💀 Tu aliado murió (${msg.score} kills)`, 4000);
+      break;
+  }
+}
+
+// ════════════════════════════════════════════════════════
+//  SEND HELPERS
+// ════════════════════════════════════════════════════════
+
+function mpRawSend(obj) {
+  if (mpChannel && mpChannel.readyState === 'open')
+    try { mpChannel.send(JSON.stringify(obj)); } catch {}
+}
+
+function mpBroadcastState() {
+  if (!mpConnected) return;
+  const w = activeWeapon();
+  mpRawSend({
+    type: 'state', x: playerX, y: playerY,
+    hp, maxHp, score,
+    dir: playerDir,
+    weapon: w ? w.type : null,
+    bullets: bullets.slice(-8).map(b => ({ x:b.x, y:b.y, sym:b.sym })),
+  });
+}
+function mpBroadcastCell(wx, wy, val) {
+  if (mpConnected) mpRawSend({ type:'cell', x:wx, y:wy, v:val });
+}
+function mpBroadcastEnemyDead(ex, ey) {
+  if (mpConnected) mpRawSend({ type:'enemy_dead', x:ex, y:ey });
+}
+function mpSendChat(text) {
+  mpRawSend({ type:'chat', text });
+  showMsg(`💬 Tú: ${text}`, 2500);
+}
+// Legacy alias called in move()
+function mpSendCell(wx, wy, val) { mpBroadcastCell(wx, wy, val); }
+
+// ════════════════════════════════════════════════════════
+//  IN-GAME UI UPDATES
+// ════════════════════════════════════════════════════════
+
+function mpEl(id) { return document.getElementById(id); }
+
+function mpUpdateHUD() {
+  if (!mpPeer) return;
+  const pct = Math.max(0, (mpPeer.hp / mpPeer.maxHp) * 100);
+  const bar = mpEl('peer-hp-bar');
+  if (bar) {
+    bar.style.width = pct + '%';
+    bar.style.background = pct > 60 ? '#00cfff' : pct > 30 ? '#ff8800' : '#ff2244';
+  }
+  const htxt = mpEl('peer-hp-txt');
+  if (htxt) htxt.textContent = `${mpPeer.hp}/${mpPeer.maxHp}`;
+
+  const kills = mpEl('peer-kills-txt');
+  if (kills) kills.textContent = `${mpPeer.score}K`;
+
+  const dist = Math.round(Math.hypot(mpPeer.x - playerX, mpPeer.y - playerY));
+  const dtxt = mpEl('peer-dist-txt');
+  if (dtxt) {
+    dtxt.textContent = `${dist}↗`;
+    dtxt.style.color = dist < 15 ? '#44ff88' : dist < 40 ? '#ffd700' : '#ff6644';
+  }
+
+  const wpn = mpEl('peer-weapon-txt');
+  if (wpn && mpPeer.weapon) {
+    const defs = { W:'Pistola',R:'Rifle',S:'Escopeta',B:'Bazuka',M:'Metra' };
+    wpn.textContent = defs[mpPeer.weapon] || '';
+  }
+
+  const ps = mpEl('peer-status');
+  if (ps) ps.textContent = `⚡${mpPeer.hp}hp`;
+}
+
+function mpUpdateArrow() {
+  if (!mpPeer || !mpConnected) return;
+  const el = mpEl('peer-arrow');
+  if (!el) return;
+  const dx = mpPeer.x - playerX, dy = mpPeer.y - playerY;
+  const dist = Math.round(Math.hypot(dx, dy));
+  if (dist <= Math.max(HVW, HVH) - 1) { el.style.display = 'none'; return; }
+  const arrows = ['→','↘','↓','↙','←','↖','↑','↗'];
+  const idx = Math.round((Math.atan2(dy, dx) / Math.PI + 1) * 4) & 7;
+  el.textContent = `${arrows[idx]} P2 ${dist}`;
+  el.style.display = 'block';
+}
+
+function mpUpdateMinimap() {
+  if (!_mpMinimapOn || !mpConnected) return;
+  const canvas = mpEl('mp-minimap-canvas');
+  if (!canvas) return;
+  const mc = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const cx = Math.floor(W/2), cy = Math.floor(H/2);
+
+  mc.fillStyle = '#030a0b';
+  mc.fillRect(0, 0, W, H);
+
+  // Terrain
+  for (let dy = -cy; dy <= cy; dy++) {
+    for (let dx = -cx; dx <= cx; dx++) {
+      const t = getCell(playerX+dx, playerY+dy);
+      const px = cx+dx, py = cy+dy;
+      if (px < 0 || py < 0 || px >= W || py >= H) continue;
+      mc.fillStyle = t==='#' ? '#1a2a1a' : t==='~' ? '#0a2a40' : t==='T' ? '#1a4a0a' : '#0d1a0d';
+      mc.fillRect(px, py, 1, 1);
+    }
+  }
+
+  // Enemies
+  mc.fillStyle = '#ff440088';
+  enemies.forEach(e => {
+    const px = cx + (e.x - playerX), py = cy + (e.y - playerY);
+    if (px>0&&py>0&&px<W&&py<H) mc.fillRect(px, py, 1, 1);
+  });
+
+  // P1 (me)
+  mc.fillStyle = '#ff4444';
+  mc.fillRect(cx-1, cy-1, 3, 3);
+
+  // P2 (peer)
+  if (mpPeer) {
+    const px2 = cx + (mpPeer.x - playerX);
+    const py2 = cy + (mpPeer.y - playerY);
+    mc.fillStyle = '#00cfff';
+    mc.fillRect(px2-1, py2-1, 3, 3);
+    // Draw a line between players
+    mc.strokeStyle = '#00cfff22';
+    mc.lineWidth = 0.5;
+    mc.beginPath(); mc.moveTo(cx, cy); mc.lineTo(px2, py2); mc.stroke();
+  }
+
+  // Border
+  mc.strokeStyle = '#0e3a3a';
+  mc.lineWidth = 1;
+  mc.strokeRect(0.5, 0.5, W-1, H-1);
+}
+
+function mpToggleMinimap() {
+  _mpMinimapOn = !_mpMinimapOn;
+  const el = mpEl('mp-minimap');
+  if (el) el.style.display = _mpMinimapOn ? 'block' : 'none';
+  if (_mpMinimapOn) mpUpdateMinimap();
+  showMsg(_mpMinimapOn ? '🗺 Mapa aliado activado (TAB)' : '🗺 Mapa oculto', 1500);
+}
+
+function mpToggleChat() {
+  _mpChatOpen = !_mpChatOpen;
+  const el = mpEl('quick-chat');
+  if (el) el.style.display = _mpChatOpen ? 'flex' : 'none';
+}
+
+// ════════════════════════════════════════════════════════
+//  LAUNCH (both players)
+// ════════════════════════════════════════════════════════
+
+function mpLaunch() {
+  mpConnected = true;
+  if (!gameMode) gameMode = 'pc';
+
+  ['screen-main','screen-options','screen-howto','screen-mp'].forEach(id =>
+    mpEl(id)?.classList.add('hidden'));
+  mpEl('touch-controls').style.display = gameMode === 'mobile' ? 'flex' : 'none';
+
+  mpEl('peer-hud').style.display    = 'flex';
+  mpEl('peer-status').style.display = 'inline';
+  mpEl('mp-latency').style.display  = 'inline';
+
+  // Host picks seed and sends it; guest has already received it via 'seed' msg
+  if (mpRole === 'host') {
+    masterSeed = Date.now() & 0xffffff;
+    mpRawSend({ type:'seed', seed:masterSeed, diff:difficulty });
+  }
+
+  reset();
+
+  // Guest spawns offset from host so they start in different rooms
+  if (mpRole === 'guest') {
+    outer: for (let r = 3; r <= 25; r++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if ((Math.abs(dx)===r || Math.abs(dy)===r) && getCell(dx+4, dy+4) === '.') {
+            playerX = dx+4; playerY = dy+4; break outer;
+          }
+        }
+      }
+    }
+    pregenAround(playerX, playerY);
+    updateStats(); render();
+  }
+
+  mpPeer = { x:0,y:0,hp:100,maxHp:100,score:0,dir:{dx:1,dy:0},weapon:null,bullets:[] };
+  mpBroadcastState();
+
+  showMsg('⚡ ¡Online! F1-F4=chat · TAB=mapa · G=chat visual', 4500);
+
+  _mpSyncTimer = setInterval(() => { if (mpConnected) mpBroadcastState(); }, 180);
+}
+
+// ════════════════════════════════════════════════════════
+//  HOST FLOW
+// ════════════════════════════════════════════════════════
+
+async function mpHostStart() {
+  mpStep(1);
+  mpSt('Generando sala…', 'wait');
+  mpEl('mp-radar').style.display = 'flex';
+
+  const conn = createPeer();
+  const ch = conn.createDataChannel('game', { ordered:false, maxRetransmits:1 });
+  mpSetupChannel(ch);
+
+  await conn.setLocalDescription(await conn.createOffer());
+
+  await new Promise(r => {
+    if (conn.iceGatheringState === 'complete') { r(); return; }
+    conn.onicegatheringstatechange = () => { if (conn.iceGatheringState === 'complete') r(); };
+    setTimeout(r, 6000);
+  });
+
+  const code = mpEncode(conn.localDescription);
+  const ob = mpEl('mp-offer-box');
+  ob.textContent = code;
+  ob.className = 'mp-code-box ready';
+
+  mpEl('mp-copy-offer').disabled   = false;
+  mpEl('mp-connect-host').disabled = false;
+  mpEl('mp-radar').style.display   = 'none';
+  mpStep(2);
+  mpSt('✅ Sala creada — comparte el código con tu aliado', 'ok');
+}
+
+// ════════════════════════════════════════════════════════
+//  GUEST FLOW
+// ════════════════════════════════════════════════════════
+
+async function mpGuestAnswer() {
+  const raw = (mpEl('mp-offer-input').value || '').trim();
+  const ofr = mpDecode(raw);
+  if (!ofr) { mpSt('❌ Código inválido — cópialo completo', 'err'); return; }
+
+  mpStep(2);
+  mpSt('Procesando…', 'wait');
+  mpEl('mp-radar').style.display = 'flex';
+  mpRole = 'guest';
+
+  const conn = createPeer();
+  conn.ondatachannel = ({ channel }) => mpSetupChannel(channel);
+
+  await conn.setRemoteDescription(new RTCSessionDescription(ofr));
+  await conn.setLocalDescription(await conn.createAnswer());
+
+  await new Promise(r => {
+    if (conn.iceGatheringState === 'complete') { r(); return; }
+    conn.onicegatheringstatechange = () => { if (conn.iceGatheringState === 'complete') r(); };
+    setTimeout(r, 6000);
+  });
+
+  const code = mpEncode(conn.localDescription);
+  const ab = mpEl('mp-answer-box');
+  ab.textContent = code;
+  ab.className = 'mp-code-box ready';
+
+  mpEl('mp-copy-answer').disabled = false;
+  mpEl('mp-guest-wait').style.display = 'block';
+  mpEl('mp-radar').style.display = 'none';
+  mpStep(3);
+  mpSt('✅ Respuesta lista — envíala al anfitrión', 'ok');
+}
+
+// ════════════════════════════════════════════════════════
+//  LOBBY WIRING
+// ════════════════════════════════════════════════════════
+
+function mpToHost() {
+  mpEl('mp-host-btn').classList.add('sel');
+  mpEl('mp-guest-btn').classList.remove('sel');
+  mpEl('mp-host-flow').style.display  = 'block';
+  mpEl('mp-guest-flow').style.display = 'none';
+  mpRole = 'host';
+}
+function mpToGuest() {
+  mpEl('mp-guest-btn').classList.add('sel');
+  mpEl('mp-host-btn').classList.remove('sel');
+  mpEl('mp-guest-flow').style.display = 'block';
+  mpEl('mp-host-flow').style.display  = 'none';
+  mpRole = 'guest';
+  if (mpConn) { try { mpConn.close(); } catch {} mpConn = null; }
+}
+
+function mpResetLobby() {
+  ['mp-offer-box','mp-answer-box'].forEach(id => {
+    const el = mpEl(id);
+    el.textContent = id === 'mp-offer-box' ? 'Generando código de sala…' : 'Aparecerá aquí tras Paso 1…';
+    el.className = 'mp-code-box placeholder';
+  });
+  mpEl('mp-copy-offer').disabled   = true;
+  mpEl('mp-connect-host').disabled = true;
+  mpEl('mp-copy-answer').disabled  = true;
+  mpEl('mp-answer-input').value    = '';
+  mpEl('mp-offer-input').value     = '';
+  mpEl('mp-guest-wait').style.display = 'none';
+  mpEl('mp-radar').style.display   = 'none';
+  mpStep(1);
+}
+
+// Open MP screen
+mpEl('btn-mp').addEventListener('click', () => {
+  showScreen('screen-mp');
+  mpResetLobby();
+  mpToHost();
+  mpSt('Iniciando sala…', 'wait');
+  mpHostStart();
+});
+
+// Switch role
+mpEl('mp-host-btn').addEventListener('click', () => {
+  if (mpRole === 'host') return;
+  mpResetLobby(); mpToHost();
+  mpSt('Generando nueva sala…', 'wait');
+  mpHostStart();
+});
+mpEl('mp-guest-btn').addEventListener('click', () => {
+  if (mpRole === 'guest') return;
+  mpResetLobby(); mpToGuest();
+  mpSt('Pega el código del anfitrión en el paso 1', 'wait');
+});
+
+// Copy offer code
+mpEl('mp-copy-offer').addEventListener('click', function() {
+  mpCopy(mpEl('mp-offer-box').textContent, this);
+});
+
+// Enable connect button when answer textarea has enough text
+mpEl('mp-answer-input').addEventListener('input', function() {
+  const ok = this.value.trim().length > 20;
+  mpEl('mp-connect-host').disabled = !ok;
+  if (ok) mpEl('mp-connect-host').classList.add('pulse');
+  else mpEl('mp-connect-host').classList.remove('pulse');
+});
+
+// Host accepts guest answer
+mpEl('mp-connect-host').addEventListener('click', async function() {
+  const ans = mpDecode((mpEl('mp-answer-input').value || '').trim());
+  if (!ans) { mpSt('❌ Código inválido — verifica que esté completo', 'err'); return; }
+  try {
+    mpEl('mp-radar').style.display = 'flex';
+    mpStep(3);
+    mpSt('Conectando…', 'wait');
+    this.disabled = true;
+    await mpConn.setRemoteDescription(new RTCSessionDescription(ans));
+  } catch(e) {
+    mpEl('mp-radar').style.display = 'none';
+    mpSt('❌ Error: ' + e.message, 'err');
+    this.disabled = false;
+  }
+});
+
+// Guest actions
+mpEl('mp-gen-answer').addEventListener('click', mpGuestAnswer);
+mpEl('mp-copy-answer').addEventListener('click', function() {
+  mpCopy(mpEl('mp-answer-box').textContent, this);
+});
+
+// Validate guest paste box
+mpEl('mp-offer-input').addEventListener('input', function() {
+  const ok = this.value.trim().length > 20;
+  mpEl('mp-gen-answer').disabled = !ok;
+});
+mpEl('mp-gen-answer').disabled = true;  // starts disabled until text pasted
+
+// Back button
+mpEl('mp-back-btn').addEventListener('click', () => {
+  if (mpConn) { try { mpConn.close(); } catch {} mpConn = null; }
+  clearInterval(_mpHeartbeat); clearInterval(_mpSyncTimer);
+  mpConnected = false; mpPeer = null;
+  showScreen('screen-main');
+});
+
+// ════════════════════════════════════════════════════════
+//  IN-GAME KEYS & CHAT
+// ════════════════════════════════════════════════════════
+
+// Quick chat buttons
+mpEl('quick-chat').querySelectorAll('.qchat-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    mpSendChat(btn.dataset.msg);
+    mpToggleChat();
+  });
+});
+
+// 'G' opens/closes quick chat in-game; F1-F4 send directly; TAB = minimap
+window.addEventListener('keydown', e => {
+  if (!mpConnected) return;
+  const fi = ['F1','F2','F3','F4'].indexOf(e.key);
+  if (fi !== -1) { e.preventDefault(); mpSendChat(MP_QCHAT[fi].text); return; }
+  if (e.key === 'Tab') { e.preventDefault(); mpToggleMinimap(); return; }
+  if ((e.key === 'g' || e.key === 'G') && !e.ctrlKey) { mpToggleChat(); }
+}, true);
+
+// Close chat on outside click
+document.addEventListener('click', e => {
+  if (_mpChatOpen && !mpEl('quick-chat').contains(e.target)) {
+    _mpChatOpen = false;
+    mpEl('quick-chat').style.display = 'none';
+  }
+});
+
+// ════════════════════════════════════════════════════════
+//  PATCH setCell — broadcast to peer
+// ════════════════════════════════════════════════════════
+const _setCell_orig = setCell;
+setCell = (wx, wy, val) => {
+  _setCell_orig(wx, wy, val);
+  if (mpConnected) mpBroadcastCell(wx, wy, val);
+};
+
+</script>
+</body>
+</html>

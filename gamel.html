@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clon de Minecraft 2D Mejorado</title>
+<script src="https://cdn.tailwindcss.com"></script>
+
+<style>
+    canvas {
+        image-rendering: pixelated;
+        background: #87CEEB;
+        display: block;
+    }
+    .toolbar-item.selected {
+        border: 3px solid #facc15;
+        transform: scale(1.1);
+    }
+    .toolbar-item {
+        transition: 0.1s ease-in-out;
+    }
+</style>
+</head>
+
+<body class="bg-gray-900 text-white flex flex-col items-center p-4">
+
+<h1 class="text-3xl font-bold mb-4">Clon de Minecraft 2D</h1>
+
+<!-- Canvas -->
+<div class="border-4 border-gray-700 rounded-lg overflow-hidden shadow-lg">
+    <canvas id="gameCanvas"></canvas>
+</div>
+
+<!-- Barra de bloques -->
+<div class="mt-4 p-4 bg-gray-800 rounded-lg shadow-inner w-full max-w-2xl">
+    <div class="flex justify-center items-center space-x-4 mb-4">
+        <p class="font-semibold">Bloques:</p>
+
+        <div id="toolbar-item-1" data-block-id="1" class="toolbar-item w-12 h-12 border-2 border-gray-400 rounded cursor-pointer selected" style="background:#22c55e;"></div>
+        <div id="toolbar-item-2" data-block-id="2" class="toolbar-item w-12 h-12 border-2 border-gray-400 rounded cursor-pointer" style="background:#854d0e;"></div>
+        <div id="toolbar-item-3" data-block-id="3" class="toolbar-item w-12 h-12 border-2 border-gray-400 rounded cursor-pointer" style="background:#6b7280;"></div>
+    </div>
+
+    <div class="text-center text-gray-400">
+        <p><b>A/D</b> Mover | <b>W</b> Saltar</p>
+        <p><b>Click Izq</b> Romper | <b>Click Der</b> Colocar</p>
+    </div>
+</div>
+
+<script type="module">
+/* ============================================================
+   CONFIG
+============================================================ */
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+function resizeCanvas() {
+    canvas.width = 900;
+    canvas.height = 500;
+}
+resizeCanvas();
+
+const BLOCK = 20;
+const WORLD_W = 200;
+const WORLD_H = 60;
+
+// Física
+const GRAVITY = 0.5;
+const SPEED = 4;
+const JUMP = 10;
+
+// Bloques
+const BLOCK_TYPES = {
+    0: { name: "Aire", color: "transparent" },
+    1: { name: "Hierba", color: "#22c55e" },
+    2: { name: "Tierra", color: "#854d0e" },
+    3: { name: "Piedra", color: "#6b7280" }
+};
+
+/* ============================================================
+   ESTADO DEL JUEGO
+============================================================ */
+let world = [];
+let keys = {};
+let selectedBlock = 1;
+
+let player = {
+    x: WORLD_W * BLOCK / 2,
+    y: WORLD_H * BLOCK / 3,
+    w: BLOCK * 0.8,
+    h: BLOCK * 1.8,
+    vx: 0,
+    vy: 0,
+    grounded: false
+};
+
+let camera = { x: 0, y: 0 };
+
+/* ============================================================
+   GENERACIÓN DEL MUNDO
+============================================================ */
+function genWorld() {
+    world = Array(WORLD_W).fill(0).map(() => Array(WORLD_H).fill(0));
+
+    const base = WORLD_H / 2;
+
+    for (let x = 0; x < WORLD_W; x++) {
+        const hill = Math.sin(x * 0.05) * 10;
+        const noise = (Math.random() - 0.5) * 3;
+        const surface = Math.floor(base + hill + noise);
+
+        for (let y = surface; y < WORLD_H; y++) {
+            world[x][y] = y === surface ? 1 : y < surface + 5 ? 2 : 3;
+        }
+    }
+}
+
+/* ============================================================
+   INPUT
+============================================================ */
+document.addEventListener("keydown", e => keys[e.key.toLowerCase()] = true);
+document.addEventListener("keyup", e => keys[e.key.toLowerCase()] = false);
+
+document.querySelectorAll(".toolbar-item").forEach(el => {
+    el.onclick = () => {
+        document.querySelectorAll(".toolbar-item").forEach(e => e.classList.remove("selected"));
+        el.classList.add("selected");
+        selectedBlock = parseInt(el.dataset.blockId);
+    };
+});
+
+canvas.addEventListener("contextmenu", e => e.preventDefault());
+
+canvas.addEventListener("mousedown", e => {
+    const rect = canvas.getBoundingClientRect();
+    const worldX = e.clientX - rect.left + camera.x;
+    const worldY = e.clientY - rect.top + camera.y;
+
+    const gx = Math.floor(worldX / BLOCK);
+    const gy = Math.floor(worldY / BLOCK);
+
+    if (gx < 0 || gx >= WORLD_W || gy < 0 || gy >= WORLD_H) return;
+
+    if (e.button === 0) world[gx][gy] = 0;
+    else if (e.button === 2) world[gx][gy] = selectedBlock;
+});
+
+/* ============================================================
+   FÍSICA
+============================================================ */
+function aabb(a, b) {
+    return (
+        a.x < b.x + b.w &&
+        a.x + a.w > b.x &&
+        a.y < b.y + b.h &&
+        a.y + a.h > b.y
+    );
+}
+
+function updatePhysics() {
+    player.vx = keys["a"] ? -SPEED : keys["d"] ? SPEED : 0;
+    if (keys["w"] && player.grounded) {
+        player.vy = -JUMP;
+        player.grounded = false;
+    }
+
+    // Horizontal
+    player.x += player.vx;
+    collide("x");
+
+    // Vertical
+    player.vy += GRAVITY;
+    player.y += player.vy;
+    collide("y");
+}
+
+function collide(axis) {
+    const px = Math.floor(player.x / BLOCK);
+    const py = Math.floor(player.y / BLOCK);
+
+    for (let x = px - 1; x <= px + 1; x++) {
+        for (let y = py - 1; y <= py + 2; y++) {
+            if (x < 0 || x >= WORLD_W || y < 0 || y >= WORLD_H) continue;
+            if (world[x][y] === 0) continue;
+
+            const block = { x: x * BLOCK, y: y * BLOCK, w: BLOCK, h: BLOCK };
+            const p = { x: player.x, y: player.y, w: player.w, h: player.h };
+
+            if (aabb(p, block)) {
+                if (axis === "x") {
+                    if (player.vx > 0) player.x = block.x - player.w;
+                    if (player.vx < 0) player.x = block.x + BLOCK;
+                } else {
+                    if (player.vy > 0) {
+                        player.y = block.y - player.h;
+                        player.vy = 0;
+                        player.grounded = true;
+                    }
+                    if (player.vy < 0) {
+                        player.y = block.y + BLOCK;
+                        player.vy = 0;
+                    }
+                }
+            }
+        }
+    }
+}
+
+/* ============================================================
+   CÁMARA
+============================================================ */
+function updateCamera() {
+    camera.x = player.x - canvas.width / 2;
+    camera.y = player.y - canvas.height / 2;
+
+    camera.x = Math.max(0, Math.min(camera.x, WORLD_W * BLOCK - canvas.width));
+    camera.y = Math.max(0, Math.min(camera.y, WORLD_H * BLOCK - canvas.height));
+}
+
+/* ============================================================
+   RENDER
+============================================================ */
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    ctx.save();
+    ctx.translate(-camera.x, -camera.y);
+
+    // Bloques visibles
+    const sx = Math.floor(camera.x / BLOCK);
+    const ex = Math.ceil((camera.x + canvas.width) / BLOCK);
+    const sy = Math.floor(camera.y / BLOCK);
+    const ey = Math.ceil((camera.y + canvas.height) / BLOCK);
+
+    for (let x = sx; x < ex; x++) {
+        for (let y = sy; y < ey; y++) {
+            if (x < 0 || x >= WORLD_W || y < 0 || y >= WORLD_H) continue;
+            const id = world[x][y];
+            if (id === 0) continue;
+
+            ctx.fillStyle = BLOCK_TYPES[id].color;
+            ctx.fillRect(x * BLOCK, y * BLOCK, BLOCK, BLOCK);
+
+            ctx.strokeStyle = "rgba(0,0,0,0.1)";
+            ctx.strokeRect(x * BLOCK, y * BLOCK, BLOCK, BLOCK);
+        }
+    }
+
+    // Player
+    ctx.fillStyle = "red";
+    ctx.fillRect(player.x, player.y, player.w, player.h);
+
+    ctx.restore();
+}
+
+/* ============================================================
+   LOOP
+============================================================ */
+function loop() {
+    updatePhysics();
+    updateCamera();
+    draw();
+    requestAnimationFrame(loop);
+}
+
+/* ============================================================
+   INIT
+============================================================ */
+genWorld();
+loop();
+</script>
+</body>
+</html>

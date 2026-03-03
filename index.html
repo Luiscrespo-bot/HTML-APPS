@@ -1,0 +1,1476 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>DUNGEON CRAWLER</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a0f;
+    color: #c8ff80;
+    font-family: 'VT323', monospace;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg, transparent, transparent 2px,
+      rgba(0,255,0,0.015) 2px, rgba(0,255,0,0.015) 4px
+    );
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  h1 {
+    font-size: 2.4rem;
+    letter-spacing: 0.3em;
+    color: #ff6b35;
+    text-shadow: 0 0 20px #ff6b3588, 0 0 40px #ff6b3544;
+    margin-bottom: 6px;
+    animation: flicker 4s infinite;
+  }
+
+  @keyframes flicker {
+    0%,95%,100% { opacity:1; } 96% { opacity:0.85; } 97% { opacity:1; } 98% { opacity:0.7; }
+  }
+
+  #stats {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.85rem;
+    color: #88bbff;
+    margin-bottom: 8px;
+    letter-spacing: 0.12em;
+  }
+
+  #map-container {
+    border: 2px solid #2a4a2a;
+    box-shadow: 0 0 30px #00ff0022, inset 0 0 30px #00000044;
+    padding: 2px;
+    background: #060a06;
+    position: relative;
+  }
+
+  #map-container::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at center, transparent 55%, #060a06cc 100%);
+    pointer-events: none;
+    z-index: 5;
+  }
+
+  canvas { display: block; image-rendering: pixelated; outline: none; }
+
+  #msg {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.82rem;
+    color: #ffd700;
+    height: 1.1em;
+    margin-top: 5px;
+    letter-spacing: 0.1em;
+    text-shadow: 0 0 8px #ffd70066;
+  }
+
+  #controls {
+    margin-top: 10px;
+    display: flex;
+    gap: 16px;
+    align-items: center;
+  }
+
+  /* ── Help button ── */
+  #btn-help {
+    width: 36px; height: 36px;
+    background: #0d1a0d;
+    border: 2px solid #3a7a3a;
+    border-radius: 50%;
+    color: #88ff88;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 1.1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s;
+    box-shadow: 0 0 8px #00ff0022;
+    flex-shrink: 0;
+  }
+  #btn-help:hover { background: #1a2a1a; box-shadow: 0 0 16px #00ff0055; color: #c8ff80; border-color: #88ff88; }
+
+  /* ── Help overlay ── */
+  #help-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  #help-overlay.open { display: flex; }
+
+  #help-panel {
+    background: #080f08;
+    border: 2px solid #3a7a3a;
+    box-shadow: 0 0 40px #00ff0033, 0 0 80px #00ff0011;
+    padding: 20px 24px 16px;
+    width: 340px;
+    max-width: 95vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    position: relative;
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  #help-close {
+    position: absolute;
+    top: 10px; right: 12px;
+    background: transparent;
+    border: 1px solid #3a5a3a;
+    color: #88cc88;
+    font-size: 0.9rem;
+    width: 26px; height: 26px;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.15s;
+  }
+  #help-close:hover { background: #1a2a1a; color: #ff6666; border-color: #ff4444; }
+
+  #help-title {
+    font-family: 'VT323', monospace;
+    font-size: 1.5rem;
+    color: #ff6b35;
+    text-shadow: 0 0 10px #ff6b3566;
+    text-align: center;
+    margin-bottom: 14px;
+    letter-spacing: 0.15em;
+  }
+
+  .help-section {
+    font-size: 0.65rem;
+    color: #3a7a3a;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    border-bottom: 1px solid #1a3a1a;
+    padding-bottom: 3px;
+    margin: 10px 0 6px;
+  }
+
+  .help-row {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    font-size: 0.78rem;
+    color: #8aaa8a;
+    margin: 4px 0;
+    line-height: 1.4;
+  }
+  .help-row > :first-child { min-width: 70px; color: #c8ff80; flex-shrink: 0; }
+
+  kbd {
+    background: #1a2a1a;
+    border: 1px solid #3a5a3a;
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.72rem;
+    color: #aaddaa;
+  }
+
+  .help-tip {
+    margin-top: 12px;
+    font-size: 0.68rem;
+    color: #4a6a4a;
+    line-height: 1.5;
+    border-top: 1px solid #1a3a1a;
+    padding-top: 8px;
+  }
+
+  /* ── D-pad ── */
+  #dpad {
+    display: grid;
+    grid-template-columns: repeat(3, 38px);
+    grid-template-rows: repeat(3, 38px);
+    gap: 3px;
+    margin-top: 4px;
+  }
+  .dpad-btn {
+    background: #1a2a1a;
+    border: 1px solid #3a5a3a;
+    border-radius: 5px;
+    color: #88cc88;
+    font-size: 1.1rem;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.1s;
+  }
+  .dpad-btn:active, .dpad-btn.active { background: #2a4a2a; color: #c8ff80; box-shadow: 0 0 8px #00ff0044; }
+  .dpad-center { background: transparent; border-color: transparent; cursor: default; }
+  #btn-fire {
+    margin-top: 4px;
+    width: 117px; height: 34px;
+    background: #1a1a0a;
+    border: 1px solid #ffd70066;
+    border-radius: 5px;
+    color: #ffd700;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.7rem;
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    transition: background 0.1s;
+  }
+  #btn-fire:active { background: #2a2a0a; box-shadow: 0 0 8px #ffd70044; }
+
+  #btn-regen {
+    margin-top: 10px;
+    background: transparent;
+    border: 1px solid #ff6b35;
+    color: #ff6b35;
+    font-family: 'VT323', monospace;
+    font-size: 1.2rem;
+    padding: 5px 22px;
+    cursor: pointer;
+    letter-spacing: 0.2em;
+    transition: all 0.2s;
+  }
+  #btn-regen:hover { background: #ff6b3522; box-shadow: 0 0 12px #ff6b3566; }
+
+  #btn-change-mode {
+    margin-top: 10px;
+    margin-left: 8px;
+    background: transparent;
+    border: 1px solid #3a6a6a;
+    color: #4a9a9a;
+    font-family: 'VT323', monospace;
+    font-size: 1.2rem;
+    padding: 5px 22px;
+    cursor: pointer;
+    letter-spacing: 0.2em;
+    transition: all 0.2s;
+  }
+  #btn-change-mode:hover { background: #0a1a1a; box-shadow: 0 0 12px #00cfff22; color: #00cfff; border-color: #00cfff66; }
+
+  /* ── Mode select screen ── */
+  /* hide touch controls by default, shown only in mobile mode */
+  #touch-controls { display: none; }
+
+  /* ═══════════════════════════════════════
+     MENU SYSTEM
+  ═══════════════════════════════════════ */
+  .menu-screen {
+    position: fixed;
+    inset: 0;
+    background: #04070a;
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .menu-screen.hidden { display: none !important; }
+
+  .menu-screen::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      repeating-linear-gradient(0deg, transparent, transparent 30px, rgba(0,255,80,0.025) 30px, rgba(0,255,80,0.025) 31px),
+      repeating-linear-gradient(90deg, transparent, transparent 30px, rgba(0,255,80,0.015) 30px, rgba(0,255,80,0.015) 31px);
+    pointer-events: none;
+  }
+
+  .menu-logo {
+    font-family: 'VT323', monospace;
+    font-size: clamp(2.8rem, 8vw, 5.5rem);
+    color: #ff6b35;
+    text-shadow: 0 0 30px #ff6b3599, 0 0 60px #ff6b3533;
+    letter-spacing: 0.25em;
+    animation: flicker 4s infinite;
+    text-align: center;
+  }
+  .menu-sub {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.65rem;
+    color: #2a4a2a;
+    letter-spacing: 0.35em;
+    margin-bottom: 44px;
+    margin-top: 2px;
+  }
+
+  .menu-btn {
+    width: 280px;
+    padding: 13px 0 13px 20px;
+    margin: 6px 0;
+    background: transparent;
+    border: 1px solid #1e3e1e;
+    font-family: 'VT323', monospace;
+    font-size: 1.85rem;
+    letter-spacing: 0.2em;
+    cursor: pointer;
+    color: #6a9a6a;
+    text-align: left;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.15s;
+  }
+  .menu-btn::before {
+    content: '▶';
+    position: absolute;
+    left: -20px;
+    top: 50%; transform: translateY(-50%);
+    font-size: 0.85rem;
+    color: #ff6b35;
+    transition: left 0.15s;
+  }
+  .menu-btn:hover { background: #0a140a; border-color: #44aa44; color: #c8ff80; transform: translateX(10px); }
+  .menu-btn:hover::before { left: 6px; }
+
+  .menu-btn.play  { color: #ff8855; border-color: #ff6b3544; font-size: 2.1rem; }
+  .menu-btn.play:hover  { background: #1a0800; border-color: #ff6b35; color: #ff6b35; box-shadow: 0 0 24px #ff6b3522; }
+
+  .menu-version {
+    position: absolute; bottom: 14px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.55rem; color: #152015; letter-spacing: 0.3em;
+  }
+
+  /* ── OPTIONS SCREEN ── */
+  .opt-title {
+    font-family: 'VT323', monospace;
+    font-size: 2.2rem; color: #ff6b35;
+    letter-spacing: 0.3em; margin-bottom: 24px;
+    text-shadow: 0 0 14px #ff6b3544;
+  }
+  .opt-section {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.58rem; color: #2a5a2a;
+    letter-spacing: 0.4em; text-transform: uppercase;
+    border-bottom: 1px solid #1a3a1a;
+    width: 340px; padding-bottom: 4px; margin: 18px 0 10px;
+  }
+
+  .toggle-group { display: flex; gap: 10px; }
+  .toggle-btn {
+    flex: 1; max-width: 160px; padding: 10px 0;
+    background: #080f08; border: 1px solid #1a3a1a; border-radius: 6px;
+    font-family: 'VT323', monospace; font-size: 1.25rem; color: #3a5a3a;
+    cursor: pointer; transition: all 0.15s; text-align: center;
+  }
+  .toggle-btn .ti { display: block; font-size: 1.5rem; margin-bottom: 1px; }
+  .toggle-btn .ts { display: block; font-family: 'Share Tech Mono', monospace; font-size: 0.5rem; color: #2a3a2a; }
+  .toggle-btn.sel { background: #0d1a0d; border-color: #44aa44; color: #c8ff80; box-shadow: 0 0 12px #00ff0022; }
+  .toggle-btn.sel .ts { color: #4a7a4a; }
+
+  .diff-grid { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; max-width: 360px; }
+  .diff-card {
+    width: 96px; padding: 11px 6px;
+    background: #06100a; border: 1px solid #1a2a1a; border-radius: 6px;
+    cursor: pointer; transition: all 0.15s; text-align: center;
+  }
+  .diff-card .di { font-size: 1.5rem; display: block; margin-bottom: 3px; }
+  .diff-card .dn {
+    font-family: 'VT323', monospace; font-size: 1rem;
+    letter-spacing: 0.08em; display: block; margin-bottom: 2px;
+    color: var(--dc);
+  }
+  .diff-card .dd {
+    font-family: 'Share Tech Mono', monospace; font-size: 0.46rem;
+    color: #2a4a2a; display: block; line-height: 1.4;
+  }
+  .diff-card:hover { transform: translateY(-3px); border-color: var(--dc); }
+  .diff-card.sel { border-color: var(--dc); background: #0d180d; box-shadow: 0 0 14px color-mix(in srgb, var(--dc) 30%, transparent); }
+
+  .opt-actions { display: flex; gap: 12px; margin-top: 24px; }
+  .opt-btn {
+    padding: 9px 26px; background: transparent;
+    border: 1px solid #2a4a2a; border-radius: 4px;
+    font-family: 'VT323', monospace; font-size: 1.45rem;
+    color: #6a9a6a; cursor: pointer; letter-spacing: 0.15em; transition: all 0.15s;
+  }
+  .opt-btn:hover { background: #0d1a0d; color: #c8ff80; border-color: #44aa44; }
+  .opt-btn.primary { border-color: #ff6b3544; color: #cc6633; }
+  .opt-btn.primary:hover { background: #1a0800; border-color: #ff6b35; color: #ff8855; box-shadow: 0 0 14px #ff6b3522; }
+
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════
+     SCREEN 1 · MAIN MENU
+════════════════════════════════════════ -->
+<div id="screen-main" class="menu-screen">
+  <div class="menu-logo">⚔ DUNGEON ⚔</div>
+  <div class="menu-sub">INFINITE ROGUELIKE · v1.0</div>
+
+  <button class="menu-btn play" id="btn-play">▶ &nbsp;JUGAR</button>
+  <button class="menu-btn"      id="btn-options">⚙ &nbsp;OPCIONES</button>
+  <button class="menu-btn"      id="btn-howto">? &nbsp;CÓMO JUGAR</button>
+
+  <div class="menu-version">⚔ DUNGEON CRAWLER ∞ · 2025</div>
+</div>
+
+<!-- ════════════════════════════════════════
+     SCREEN 2 · OPTIONS
+════════════════════════════════════════ -->
+<div id="screen-options" class="menu-screen hidden">
+  <div class="opt-title">⚙ OPCIONES</div>
+
+  <div class="opt-section">DISPOSITIVO</div>
+  <div class="toggle-group">
+    <button class="toggle-btn sel" id="tog-pc">
+      <span class="ti">🖥️</span> PC
+      <span class="ts">WASD + ESPACIO</span>
+    </button>
+    <button class="toggle-btn" id="tog-mobile">
+      <span class="ti">📱</span> MÓVIL
+      <span class="ts">D-PAD táctil</span>
+    </button>
+  </div>
+
+  <div class="opt-section">DIFICULTAD</div>
+  <div class="diff-grid">
+    <div class="diff-card" data-diff="baby" style="--dc:#44aaff">
+      <span class="di">🍼</span>
+      <span class="dn">BEBÉ</span>
+      <span class="dd">Sin enemigos<br>HP ilimitado</span>
+    </div>
+    <div class="diff-card" data-diff="easy" style="--dc:#44ff88">
+      <span class="di">🌿</span>
+      <span class="dn">FÁCIL</span>
+      <span class="dd">Enemigos lentos<br>+regen rápida</span>
+    </div>
+    <div class="diff-card sel" data-diff="normal" style="--dc:#ffd700">
+      <span class="di">⚔</span>
+      <span class="dn">NORMAL</span>
+      <span class="dd">Experiencia<br>estándar</span>
+    </div>
+    <div class="diff-card" data-diff="hard" style="--dc:#ff8800">
+      <span class="di">🔥</span>
+      <span class="dn">DIFÍCIL</span>
+      <span class="dd">Enemigos fuertes<br>-pociones</span>
+    </div>
+    <div class="diff-card" data-diff="hell" style="--dc:#ff2244">
+      <span class="di">💀</span>
+      <span class="dn">INFIERNO</span>
+      <span class="dd">Sin regen<br>daño x2</span>
+    </div>
+  </div>
+
+  <div class="opt-actions">
+    <button class="opt-btn" id="btn-opts-back">← VOLVER</button>
+    <button class="opt-btn primary" id="btn-opts-play">▶ JUGAR</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     SCREEN 3 · HOW TO PLAY (reuses help panel)
+════════════════════════════════════════ -->
+<div id="screen-howto" class="menu-screen hidden">
+  <div class="opt-title">? CÓMO JUGAR</div>
+  <div style="overflow-y:auto;max-height:70vh;width:340px;max-width:95vw">
+    <div class="opt-section">MOVIMIENTO</div>
+    <div style="font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:#6a8a6a;line-height:2">
+      <div><kbd style="background:#1a2a1a;border:1px solid #3a5a3a;border-radius:3px;padding:1px 5px;color:#aaddaa">W A S D</kbd> &nbsp;Mover al jugador</div>
+      <div><kbd style="background:#1a2a1a;border:1px solid #3a5a3a;border-radius:3px;padding:1px 5px;color:#aaddaa">ESPACIO</kbd> &nbsp;Disparar</div>
+      <div><kbd style="background:#1a2a1a;border:1px solid #3a5a3a;border-radius:3px;padding:1px 5px;color:#aaddaa">1 – 5</kbd> &nbsp;Cambiar arma activa</div>
+      <div><kbd style="background:#1a2a1a;border:1px solid #3a5a3a;border-radius:3px;padding:1px 5px;color:#aaddaa">R</kbd> &nbsp;Reiniciar (Game Over)</div>
+    </div>
+    <div class="opt-section">SALUD</div>
+    <div style="font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:#6a8a6a;line-height:2">
+      <div><span style="color:#ff4466">+</span> Poción — +20 HP</div>
+      <div><span style="color:#ff2244">♥</span> Corazón — +50 HP y sube HP máximo</div>
+      <div><span style="color:#c8860a">☕</span> Café mágico — +8 HP</div>
+      <div><span style="color:#44ff88">💚</span> Regen pasiva: +1 HP c/15 pasos</div>
+    </div>
+    <div class="opt-section">ARMAS</div>
+    <div style="font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:#6a8a6a;line-height:2">
+      <div><span style="color:#ffd700">W</span> Pistola — 1 dmg, estándar</div>
+      <div><span style="color:#00cfff">R</span> Rifle — 2 dmg, bala rápida</div>
+      <div><span style="color:#ff6600">S</span> Escopeta — 5 balas en abanico</div>
+      <div><span style="color:#ff44aa">B</span> Bazuka — 3 dmg, lento</div>
+      <div><span style="color:#44ff88">M</span> Metralleta — ráfaga x3</div>
+    </div>
+    <div class="opt-section">ENEMIGOS</div>
+    <div style="font-family:'Share Tech Mono',monospace;font-size:0.72rem;color:#6a8a6a;line-height:2">
+      <div><span style="color:#cc44ff">E</span> Esqueleto — 2 HP, rápido, 8 dmg</div>
+      <div><span style="color:#ff8800">G</span> Goblin — 3 HP, lento, 15 dmg</div>
+    </div>
+  </div>
+  <div class="opt-actions" style="margin-top:20px">
+    <button class="opt-btn" id="btn-howto-back">← VOLVER</button>
+    <button class="opt-btn primary" id="btn-howto-play">▶ JUGAR</button>
+  </div>
+</div>
+
+<h1>⚔ DUNGEON ⚔</h1>
+<div id="stats">
+  HP: <span id="hp">100</span> &nbsp;|&nbsp;
+  <span id="weapon-hud">Sin armas</span> &nbsp;|&nbsp;
+  KILLS: <span id="score">0</span> &nbsp;|&nbsp;
+  <span id="diff-label" style="opacity:0.6"></span>
+</div>
+<div id="map-container">
+  <canvas id="canvas"></canvas>
+</div>
+<div id="msg"></div>
+
+<div id="controls">
+  <!-- Help button always visible -->
+  <button id="btn-help" title="Ayuda">?</button>
+
+  <!-- Touch controls: only shown in mobile mode -->
+  <div id="touch-controls" style="display:flex;flex-direction:column;align-items:center;gap:0">
+    <div id="dpad">
+      <div></div>
+      <button class="dpad-btn" id="dbtn-w" title="Arriba">▲</button>
+      <div></div>
+      <button class="dpad-btn" id="dbtn-a" title="Izquierda">◀</button>
+      <div class="dpad-btn dpad-center">@</div>
+      <button class="dpad-btn" id="dbtn-d" title="Derecha">▶</button>
+      <div></div>
+      <button class="dpad-btn" id="dbtn-s" title="Abajo">▼</button>
+      <div></div>
+    </div>
+    <button id="btn-fire">💥 DISPARAR</button>
+  </div>
+</div>
+
+<!-- Help modal -->
+<div id="help-overlay">
+  <div id="help-panel">
+    <button id="help-close">✕</button>
+    <div id="help-title">⚔ GUÍA DE JUEGO ⚔</div>
+    <div class="help-section">MOVIMIENTO</div>
+    <div class="help-row"><kbd>W A S D</kbd> <span>Mover al jugador</span></div>
+    <div class="help-row"><kbd>ESPACIO</kbd> <span>Disparar en la dirección que miras</span></div>
+    <div class="help-row"><kbd>1 – 5</kbd> <span>Cambiar arma activa</span></div>
+    <div class="help-row"><kbd>R</kbd> <span>Reiniciar (tras Game Over)</span></div>
+    <div class="help-section">SALUD</div>
+    <div class="help-row"><span style="color:#ff4466">+</span> <span>Poción — recupera 20 HP</span></div>
+    <div class="help-row"><span style="color:#ff2244">♥</span> <span>Corazón — +50 HP y sube el HP máximo</span></div>
+    <div class="help-row"><span style="color:#c8860a">☕</span> <span>Café mágico — recupera 8 HP</span></div>
+    <div class="help-row"><span style="color:#44ff88">💚</span> <span>Regeneración pasiva: +1 HP cada 15 pasos</span></div>
+    <div class="help-row"><span style="color:#ffd700">🎲</span> <span>Enemigos tienen 35% de probabilidad de soltar una poción al morir</span></div>
+    <div class="help-section">MAPA</div>
+    <div class="help-row"><span style="color:#1a5570">~</span> <span>Agua — te quita 5 HP al cruzar</span></div>
+    <div class="help-row"><span style="color:#3a7a2a">T</span> <span>Bosque — ralentiza; balas lo destruyen</span></div>
+    <div class="help-row"><span style="color:#cc44ff">E</span> <span>Esqueleto — 2 HP, rápido, 8 dmg</span></div>
+    <div class="help-row"><span style="color:#ff8800">G</span> <span>Goblin — 3 HP, lento, 15 dmg</span></div>
+    <div class="help-section">ARMAS</div>
+    <div class="help-row"><span style="color:#ffd700">W</span> <span>Pistola — bala estándar, 1 dmg</span></div>
+    <div class="help-row"><span style="color:#00cfff">R</span> <span>Rifle — bala rápida y penetrante, 2 dmg</span></div>
+    <div class="help-row"><span style="color:#ff6600">S</span> <span>Escopeta — 5 balas en abanico, 1 dmg c/u</span></div>
+    <div class="help-row"><span style="color:#ff44aa">B</span> <span>Bazuka — proyectil lento, 3 dmg</span></div>
+    <div class="help-row"><span style="color:#44ff88">M</span> <span>Metralleta — ráfaga de 3 balas, 1 dmg c/u</span></div>
+    <div class="help-tip">Recoger la misma arma recarga su munición.<br>Golpea enemigos en melee moviéndote hacia ellos.</div>
+  </div>
+</div>
+
+
+<button id="btn-regen">[ NUEVO MUNDO ]</button>
+<button id="btn-change-mode">[ CAMBIAR MODO ]</button>
+
+<script>
+// ── CONFIG ──────────────────────────────────────────────
+const CELL   = 18;
+const VIEW_W = 49;   // visible columns (odd)
+const VIEW_H = 27;   // visible rows (odd)
+const CHUNK  = 16;   // chunk side in cells
+const HVW    = (VIEW_W - 1) / 2;
+const HVH    = (VIEW_H - 1) / 2;
+
+const canvas = document.getElementById('canvas');
+const ctx    = canvas.getContext('2d');
+canvas.width  = VIEW_W * CELL;
+canvas.height = VIEW_H * CELL;
+
+// ── STATE ───────────────────────────────────────────────
+let world      = new Map();
+let playerX    = 0, playerY = 0;
+let playerDir  = { dx: 1, dy: 0 };
+let steps = 0, hp = 100, maxHp = 100;
+let bullets    = [];
+let enemies    = [];
+let score      = 0;
+let gameOver   = false;
+let masterSeed = Date.now() & 0xffffff;
+let regenSteps = 0;   // steps walked counter for passive regen
+
+// ── RNG ─────────────────────────────────────────────────
+function makeRng(seed) {
+  let s = seed | 0;
+  return () => {
+    s = (Math.imul(s, 1664525) + 1013904223) | 0;
+    return (s >>> 0) / 0x100000000;
+  };
+}
+
+function chunkSeed(cx, cy) {
+  let s = masterSeed ^ (cx * 374761393) ^ (cy * 1103515245);
+  s = ((s ^ (s >>> 16)) * 0x45d9f3b) | 0;
+  s = ((s ^ (s >>> 16)) * 0x45d9f3b) | 0;
+  return (s ^ (s >>> 16)) | 0;
+}
+
+// Border exit positions: deterministic per EDGE shared between two chunks.
+// For a horizontal edge between chunk (cx,cy) top and (cx,cy-1) bottom → seed from cx and cy.
+// Returns 2–3 column positions that are always open on that edge.
+function edgeExits(edgeSeed, size) {
+  const rng = makeRng(edgeSeed);
+  const count = 2 + (rng() < 0.4 ? 1 : 0);
+  const exits = new Set();
+  while (exits.size < count) {
+    exits.add(2 + Math.floor(rng() * (size - 4)));
+  }
+  return [...exits];
+}
+
+// ── CHUNK GEN ───────────────────────────────────────────
+function generateChunk(cx, cy) {
+  const rng   = makeRng(chunkSeed(cx, cy));
+  const C     = CHUNK;
+  const chunk = Array.from({ length: C }, () => Array(C).fill('#'));
+
+  // ── 1. BSP rooms ─────────────────────────────────────
+  const rooms = [];
+
+  function splitNode(x, y, w, h, depth) {
+    const minRoom = 4;
+    if (w < minRoom * 2 + 1 && h < minRoom * 2 + 1) {
+      // Leaf: carve a room
+      const rw = minRoom + Math.floor(rng() * Math.max(1, w - minRoom - 1));
+      const rh = minRoom + Math.floor(rng() * Math.max(1, h - minRoom - 1));
+      const rx = x + 1 + Math.floor(rng() * Math.max(1, w - rw - 1));
+      const ry = y + 1 + Math.floor(rng() * Math.max(1, h - rh - 1));
+      const room = { x: rx, y: ry, w: rw, h: rh,
+                     cx: rx + Math.floor(rw/2), cy: ry + Math.floor(rh/2) };
+      rooms.push(room);
+      for (let ry2 = ry; ry2 < ry + rh && ry2 < C; ry2++)
+        for (let rx2 = rx; rx2 < rx + rw && rx2 < C; rx2++)
+          chunk[ry2][rx2] = '.';
+      return room;
+    }
+    // Split axis: prefer the longer side
+    const splitH = (w >= h && w >= minRoom * 2 + 1)
+                    ? true
+                    : (h >= minRoom * 2 + 1 ? false : true);
+    if (splitH && w >= minRoom * 2 + 1) {
+      const split = minRoom + Math.floor(rng() * (w - minRoom * 2));
+      const a = splitNode(x,         y, split,     h, depth + 1);
+      const b = splitNode(x + split, y, w - split, h, depth + 1);
+      if (a && b) carveCorridor(a.cx, a.cy, b.cx, b.cy, chunk, rng);
+      return a || b;
+    } else if (h >= minRoom * 2 + 1) {
+      const split = minRoom + Math.floor(rng() * (h - minRoom * 2));
+      const a = splitNode(x, y,         w, split,     depth + 1);
+      const b = splitNode(x, y + split, w, h - split, depth + 1);
+      if (a && b) carveCorridor(a.cx, a.cy, b.cx, b.cy, chunk, rng);
+      return a || b;
+    }
+    return null;
+  }
+
+  splitNode(0, 0, C, C, 0);
+
+  // ── 2. Border corridors (guaranteed exits on each edge) ──
+  // Edge seeds MUST be identical for both chunks sharing that edge.
+  // Horizontal edge between row cy and cy-1: use cy (the lower chunk's cy) as anchor.
+  // Vertical edge between col cx and cx-1: use cx (the right chunk's cx) as anchor.
+  const topSeed    = chunkSeed(cx, cy)   ^ 0xABCD1234;  // top edge of this chunk = bottom edge of (cx, cy-1)
+  const bottomSeed = chunkSeed(cx, cy+1) ^ 0xABCD1234;  // bottom edge of this chunk = top edge of (cx, cy+1)
+  const leftSeed   = chunkSeed(cx, cy)   ^ 0xDEAD5678;  // left edge of this chunk = right edge of (cx-1, cy)
+  const rightSeed  = chunkSeed(cx+1, cy) ^ 0xDEAD5678;  // right edge of this chunk = left edge of (cx+1, cy)
+
+  function carveExit(exits, isVertical, border) {
+    for (const pos of exits) {
+      if (isVertical) {
+        // pos is column, border is row (0 or C-1)
+        chunk[border][pos] = '.';
+        // carve inward 3 cells to connect to interior
+        const dir = border === 0 ? 1 : -1;
+        for (let i = 0; i < 4; i++) {
+          const r = border + dir * i;
+          if (r >= 0 && r < C) chunk[r][pos] = '.';
+        }
+        // connect this exit to nearest room center
+        if (rooms.length) {
+          const nearest = rooms.reduce((best, rm) =>
+            Math.abs(rm.cx - pos) < Math.abs(best.cx - pos) ? rm : best, rooms[0]);
+          carveCorridor(pos, border + dir * 3, nearest.cx, nearest.cy, chunk, rng);
+        }
+      } else {
+        // pos is row, border is column (0 or C-1)
+        chunk[pos][border] = '.';
+        const dir = border === 0 ? 1 : -1;
+        for (let i = 0; i < 4; i++) {
+          const c = border + dir * i;
+          if (c >= 0 && c < C) chunk[pos][c] = '.';
+        }
+        if (rooms.length) {
+          const nearest = rooms.reduce((best, rm) =>
+            Math.abs(rm.cy - pos) < Math.abs(best.cy - pos) ? rm : best, rooms[0]);
+          carveCorridor(border + dir * 3, pos, nearest.cx, nearest.cy, chunk, rng);
+        }
+      }
+    }
+  }
+
+  carveExit(edgeExits(topSeed,    C), true,  0);
+  carveExit(edgeExits(bottomSeed, C), true,  C - 1);
+  carveExit(edgeExits(leftSeed,   C), false, 0);
+  carveExit(edgeExits(rightSeed,  C), false, C - 1);
+
+  // ── 3. Decorations ────────────────────────────────────
+  // Water patches (only inside floor)
+  for (let i = 0; i < 2; i++) {
+    const wcx = 2 + Math.floor(rng() * (C - 4));
+    const wcy = 2 + Math.floor(rng() * (C - 4));
+    const r   = 1 + Math.floor(rng() * 2);
+    for (let y = wcy - r; y <= wcy + r; y++)
+      for (let x = wcx - r; x <= wcx + r; x++)
+        if (y > 0 && y < C-1 && x > 0 && x < C-1
+            && chunk[y][x] === '.' && (x-wcx)**2+(y-wcy)**2 <= r*r)
+          chunk[y][x] = '~';
+  }
+
+  // Forest clusters
+  for (let i = 0; i < 3 + Math.floor(rng() * 3); i++) {
+    const fcx = 1 + Math.floor(rng() * (C - 2));
+    const fcy = 1 + Math.floor(rng() * (C - 2));
+    for (let j = 0; j < 5; j++) {
+      const tx = fcx + Math.floor(rng() * 3) - 1;
+      const ty = fcy + Math.floor(rng() * 3) - 1;
+      if (ty > 0 && ty < C-1 && tx > 0 && tx < C-1 && chunk[ty][tx] === '.')
+        chunk[ty][tx] = 'T';
+    }
+  }
+
+  // Weapon item (random type)
+  {
+    const types = Object.keys(WEAPON_DEFS);
+    if (rng() < 0.55) {
+      for (let attempt = 0; attempt < 40; attempt++) {
+        const wx = 1 + Math.floor(rng() * (C - 2));
+        const wy = 1 + Math.floor(rng() * (C - 2));
+        if (chunk[wy][wx] === '.') {
+          chunk[wy][wx] = types[Math.floor(rng() * types.length)];
+          break;
+        }
+      }
+    }
+  }
+
+  // Health items: potion '+', heart '♥', coffee '☕'
+  {
+    const healthItems = ['+', '+', '+', '♥', '☕']; // '+' most common
+    const count = rng() < 0.7 ? 1 : 2;
+    for (let i = 0; i < count; i++) {
+      if (rng() < 0.65) {
+        for (let attempt = 0; attempt < 40; attempt++) {
+          const hx = 1 + Math.floor(rng() * (C - 2));
+          const hy = 1 + Math.floor(rng() * (C - 2));
+          if (chunk[hy][hx] === '.') {
+            chunk[hy][hx] = healthItems[Math.floor(rng() * healthItems.length)];
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  return chunk;
+}
+
+// Carve an L-shaped corridor between two points
+function carveCorridor(x1, y1, x2, y2, chunk, rng) {
+  const C = CHUNK;
+  // Randomly go horizontal-then-vertical or vertical-then-horizontal
+  if (rng() < 0.5) {
+    for (let x = Math.min(x1,x2); x <= Math.max(x1,x2); x++)
+      if (y1 >= 0 && y1 < C && x >= 0 && x < C && chunk[y1][x] === '#') chunk[y1][x] = '.';
+    for (let y = Math.min(y1,y2); y <= Math.max(y1,y2); y++)
+      if (y >= 0 && y < C && x2 >= 0 && x2 < C && chunk[y][x2] === '#') chunk[y][x2] = '.';
+  } else {
+    for (let y = Math.min(y1,y2); y <= Math.max(y1,y2); y++)
+      if (y >= 0 && y < C && x1 >= 0 && x1 < C && chunk[y][x1] === '#') chunk[y][x1] = '.';
+    for (let x = Math.min(x1,x2); x <= Math.max(x1,x2); x++)
+      if (y2 >= 0 && y2 < C && x >= 0 && x < C && chunk[y2][x] === '#') chunk[y2][x] = '.';
+  }
+}
+
+// ── WORLD ACCESS ────────────────────────────────────────
+function toChunkCoords(wx, wy) {
+  const cx = Math.floor(wx / CHUNK), cy = Math.floor(wy / CHUNK);
+  const lx = ((wx % CHUNK) + CHUNK) % CHUNK;
+  const ly = ((wy % CHUNK) + CHUNK) % CHUNK;
+  return { cx, cy, lx, ly };
+}
+
+function getOrGen(cx, cy) {
+  const k = `${cx},${cy}`;
+  if (!world.has(k)) world.set(k, generateChunk(cx, cy));
+  return world.get(k);
+}
+
+function getCell(wx, wy) {
+  const { cx, cy, lx, ly } = toChunkCoords(wx, wy);
+  return getOrGen(cx, cy)[ly][lx];
+}
+
+function setCell(wx, wy, val) {
+  const { cx, cy, lx, ly } = toChunkCoords(wx, wy);
+  getOrGen(cx, cy)[ly][lx] = val;
+}
+
+// Pre-generate surrounding chunks to avoid stuttering
+function pregenAround(wx, wy) {
+  const halfCX = Math.ceil(HVW / CHUNK) + 2;
+  const halfCY = Math.ceil(HVH / CHUNK) + 2;
+  const baseCX = Math.floor(wx / CHUNK);
+  const baseCY = Math.floor(wy / CHUNK);
+  for (let cy = baseCY - halfCY; cy <= baseCY + halfCY; cy++)
+    for (let cx = baseCX - halfCX; cx <= baseCX + halfCX; cx++)
+      getOrGen(cx, cy);
+}
+
+// ── RENDER ──────────────────────────────────────────────
+const COLORS = {
+  '#': '#4a6a4a', '.': '#1a2a1a', '~': '#1a5570',
+  'T': '#3a7a2a',
+  // weapons on ground
+  'W': '#ffd700', 'R': '#00cfff', 'S': '#ff6600', 'B': '#ff44aa', 'M': '#44ff88',
+  // health items
+  '+': '#ff4466', '♥': '#ff2244', '☕': '#c8860a',
+  // player & enemies
+  '@': '#ff4444', 'E': '#cc44ff', 'G': '#ff8800',
+  // bullets
+  '-': '#ffee00', '=': '#00cfff', '*': '#ff9933', 'o': '#ff44aa', '·': '#88ffaa',
+};
+const GLOW = {
+  '@': { color: '#ff222255', blur: 14 },
+  'W': { color: '#ffd70055', blur: 8  },
+  'R': { color: '#00cfff55', blur: 8  },
+  'S': { color: '#ff660055', blur: 8  },
+  'B': { color: '#ff44aa55', blur: 10 },
+  'M': { color: '#44ff8855', blur: 8  },
+  '+': { color: '#ff446699', blur: 12 },
+  '♥': { color: '#ff2244cc', blur: 16 },
+  '☕': { color: '#c8860a88', blur: 8  },
+  '-': { color: '#ffee0099', blur: 8  },
+  '=': { color: '#00cfff99', blur: 10 },
+  '*': { color: '#ff993399', blur: 6  },
+  'o': { color: '#ff44aacc', blur: 14 },
+  '·': { color: '#88ffaa88', blur: 4  },
+  '~': { color: '#1a557066', blur: 4  },
+  'E': { color: '#cc44ff66', blur: 10 },
+  'G': { color: '#ff880066', blur: 8  },
+};
+
+function render() {
+  ctx.fillStyle = '#060a06';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.font = `bold ${CELL - 1}px VT323, monospace`;
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'middle';
+
+  const bulletSet = new Set(); // kept for compatibility
+  const enemyMap  = new Map(enemies.map(e => [`${e.x},${e.y}`, e]));
+
+  for (let vy = 0; vy < VIEW_H; vy++) {
+    for (let vx = 0; vx < VIEW_W; vx++) {
+      const wx = playerX + (vx - HVW);
+      const wy = playerY + (vy - HVH);
+      const px = vx * CELL + CELL / 2;
+      const py = vy * CELL + CELL / 2;
+
+      let ch;
+      const enemy = enemyMap.get(`${wx},${wy}`);
+      const bullet = [...bullets].find(b => b.x === wx && b.y === wy);
+      if (wx === playerX && wy === playerY) ch = '@';
+      else if (enemy)   ch = enemy.type;
+      else if (bullet)  ch = bullet.sym || '-';
+      else              ch = getCell(wx, wy);
+
+      const g = GLOW[ch];
+      if (g) { ctx.shadowColor = g.color; ctx.shadowBlur = g.blur; }
+      else     ctx.shadowBlur = 0;
+
+      ctx.fillStyle = COLORS[ch] || '#2a3a2a';
+      ctx.fillText(ch, px, py);
+
+      // HP bar for visible enemies
+      if (enemy) {
+        const maxHp = enemy.type === 'E' ? 2 : 3;
+        const barW  = CELL - 2;
+        const filled = Math.round((enemy.hp / maxHp) * barW);
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#300';
+        ctx.fillRect(px - barW/2, py + 7, barW, 2);
+        ctx.fillStyle = enemy.hp === maxHp ? '#0f0' : '#f80';
+        ctx.fillRect(px - barW/2, py + 7, filled, 2);
+      }
+    }
+  }
+
+  ctx.shadowBlur = 0;
+
+  // Game over overlay
+  if (gameOver) {
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.shadowColor = '#ff4444'; ctx.shadowBlur = 30;
+    ctx.fillStyle = '#ff4444';
+    ctx.font = `bold 52px VT323, monospace`;
+    ctx.fillText('GAME OVER', canvas.width/2, canvas.height/2 - 20);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = '#ffd700';
+    ctx.font = `bold 24px VT323, monospace`;
+    ctx.fillText(`KILLS: ${score}  |  Pulsa R para reiniciar`, canvas.width/2, canvas.height/2 + 20);
+  }
+}
+
+// ── STATS ───────────────────────────────────────────────
+function updateStats() {
+  const hpEl = document.getElementById('hp');
+  hpEl.textContent = `${hp}/${maxHp}`;
+  hpEl.style.color = hp > maxHp * 0.6 ? '#88ff88' : hp > maxHp * 0.3 ? '#ffaa00' : '#ff4444';
+  document.getElementById('score').textContent = score;
+  const dl = document.getElementById('diff-label');
+  if (dl) dl.textContent = diff().label;
+
+  const hud = document.getElementById('weapon-hud');
+  if (inventory.length === 0) {
+    hud.textContent = 'Sin armas';
+    hud.style.color = '#556655';
+  } else {
+    hud.innerHTML = inventory.map((w, i) => {
+      const def   = WEAPON_DEFS[w.type];
+      const active = i === activeSlot;
+      const color  = active ? def.color : '#446644';
+      const border = active ? `text-decoration:underline;font-weight:bold` : '';
+      return `<span style="color:${color};${border}">[${i+1}]${def.sym}×${w.ammo}</span>`;
+    }).join(' ');
+  }
+}
+
+function showMsg(txt, duration = 1500) {
+  const el = document.getElementById('msg');
+  el.textContent = txt;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.textContent = '', duration);
+}
+
+function flashKey(k) {
+  const el = document.getElementById('key-' + k);
+  if (!el) return;
+  el.classList.add('active');
+  setTimeout(() => el.classList.remove('active'), 150);
+}
+
+// ── WEAPON SYSTEM ───────────────────────────────────────
+// Each weapon type: symbol shown on map, bullet symbol, dmg, bullets per shot, speed, color, name
+const WEAPON_DEFS = {
+  'W': { name: 'Pistola',    sym: 'W', bSym: '-', dmg: 1, shots: 1, bSpeed: 110, spread: 0,  color: '#ffd700', bColor: '#ffee00', glow: '#ffd70066' },
+  'R': { name: 'Rifle',      sym: 'R', bSym: '=', dmg: 2, shots: 1, bSpeed: 60,  spread: 0,  color: '#00cfff', bColor: '#00cfff', glow: '#00cfff55' },
+  'S': { name: 'Escopeta',   sym: 'S', bSym: '*', dmg: 1, shots: 5, bSpeed: 130, spread: 2,  color: '#ff6600', bColor: '#ff9933', glow: '#ff660055' },
+  'B': { name: 'Bazuka',     sym: 'B', bSym: 'o', dmg: 3, shots: 1, bSpeed: 180, spread: 0,  color: '#ff44aa', bColor: '#ff44aa', glow: '#ff44aa66' },
+  'M': { name: 'Metralleta', sym: 'M', bSym: '.', dmg: 1, shots: 3, bSpeed: 80,  spread: 1,  color: '#44ff88', bColor: '#88ffaa', glow: '#44ff8855' },
+};
+
+// Weapon pool items on the ground: { x, y, type }
+let weaponItems = [];
+// Player inventory: { type, ammo }
+let inventory   = [];   // array of { type, ammo }
+let activeSlot  = 0;    // index into inventory
+
+function activeWeapon() { return inventory[activeSlot] || null; }
+
+function pickupWeapon(wx, wy, type) {
+  // Check if already carrying this type
+  const existing = inventory.find(w => w.type === type);
+  if (existing) {
+    existing.ammo += WEAPON_DEFS[type].shots * 4;
+    showMsg(`🔄 ${WEAPON_DEFS[type].name} recargada! +${WEAPON_DEFS[type].shots * 4} balas`);
+  } else {
+    inventory.push({ type, ammo: WEAPON_DEFS[type].shots * 6 });
+    showMsg(`🎯 Recogiste ${WEAPON_DEFS[type].name}! [${inventory.length - 1 + 1}]`);
+  }
+  // Remove from ground
+  weaponItems = weaponItems.filter(w => !(w.x === wx && w.y === wy));
+}
+
+// Place weapon items during chunk gen
+function placeWeaponItem(cx, cy, chunk, rng) {
+  const C     = CHUNK;
+  const types = Object.keys(WEAPON_DEFS);
+  if (rng() < 0.55) {
+    for (let attempt = 0; attempt < 40; attempt++) {
+      const wx = 1 + Math.floor(rng() * (C - 2));
+      const wy = 1 + Math.floor(rng() * (C - 2));
+      if (chunk[wy][wx] === '.') {
+        const type = types[Math.floor(rng() * types.length)];
+        const worldX = cx * C + wx;
+        const worldY = cy * C + wy;
+        // Mark on map with weapon symbol
+        chunk[wy][wx] = type;
+        break;
+      }
+    }
+  }
+}
+const ENEMY_TYPES = {
+  E: { hp: 2, dmg: 8,  speed: 3, name: 'Esqueleto' },
+  G: { hp: 3, dmg: 15, speed: 5, name: 'Goblin'    },
+};
+
+// Spawn enemies near the player as they explore
+function spawnEnemiesAround(wx, wy) {
+  const SPAWN_RADIUS = 20;
+  const MIN_DIST     = 8;
+  const rng = makeRng((wx * 7919 + wy * 6271) ^ masterSeed);
+
+  // Only spawn if no enemy already near this position
+  if (rng() > diff().spawnChance) return;
+
+  const type = rng() < 0.6 ? 'E' : 'G';
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const angle = rng() * Math.PI * 2;
+    const dist  = MIN_DIST + Math.floor(rng() * (SPAWN_RADIUS - MIN_DIST));
+    const ex    = Math.round(wx + Math.cos(angle) * dist);
+    const ey    = Math.round(wy + Math.sin(angle) * dist);
+    const cell  = getCell(ex, ey);
+    if (cell !== '.' && cell !== 'T') continue;
+    // Don't stack enemies
+    if (enemies.some(e => e.x === ex && e.y === ey)) continue;
+    enemies.push({ x: ex, y: ey, type, hp: Math.max(1, Math.round(ENEMY_TYPES[type].hp * diff().enemyHpMult)), cooldown: 0 });
+    break;
+  }
+
+  // Remove enemies too far from player (>40 tiles)
+  enemies = enemies.filter(e =>
+    Math.abs(e.x - playerX) <= 40 && Math.abs(e.y - playerY) <= 40
+  );
+}
+
+// Simple pathfinding: move one step toward player avoiding walls
+function stepToward(e) {
+  const dx = playerX - e.x, dy = playerY - e.y;
+  const absDx = Math.abs(dx), absDy = Math.abs(dy);
+
+  // Try primary axis first, then secondary
+  const moves = [];
+  if (absDx > absDy) {
+    moves.push([Math.sign(dx), 0], [0, Math.sign(dy)], [Math.sign(dx), Math.sign(dy)]);
+  } else {
+    moves.push([0, Math.sign(dy)], [Math.sign(dx), 0], [Math.sign(dx), Math.sign(dy)]);
+  }
+
+  for (const [mdx, mdy] of moves) {
+    if (mdx === 0 && mdy === 0) continue;
+    const nx = e.x + mdx, ny = e.y + mdy;
+    const cell = getCell(nx, ny);
+    if (cell === '#') continue;
+    if (enemies.some(o => o !== e && o.x === nx && o.y === ny)) continue;
+    return { nx, ny };
+  }
+  return { nx: e.x, ny: e.y }; // stuck
+}
+
+let enemyTickCount = 0;
+function tickEnemies() {
+  if (gameOver) return;
+  enemyTickCount++;
+
+  for (const e of enemies) {
+    const stats = ENEMY_TYPES[e.type];
+    const dist  = Math.abs(e.x - playerX) + Math.abs(e.y - playerY);
+
+    // Only act if within sight range
+    if (dist > 22) continue;
+
+    e.cooldown = Math.max(0, e.cooldown - 1);
+    if (e.cooldown > 0) continue;
+
+    // Attack if adjacent
+    if (dist === 1) {
+      const actualDmg = Math.round(stats.dmg * diff().enemyDmgMult);
+      hp -= actualDmg;
+      showMsg(`💀 ${stats.name} te ataca! -${actualDmg} HP`);
+      e.cooldown = stats.speed + 1;
+      if (hp <= 0) { hp = 0; gameOver = true; }
+      updateStats();
+      render();
+      continue;
+    }
+
+    // Move toward player (slower goblins move every other tick)
+    if (e.type === 'G' && enemyTickCount % 2 !== 0) continue;
+    const { nx, ny } = stepToward(e);
+    e.x = nx; e.y = ny;
+    e.cooldown = stats.speed;
+  }
+
+  render();
+}
+
+setInterval(tickEnemies, 250);
+
+// ── MOVE ────────────────────────────────────────────────
+function move(dx, dy) {
+  if (gameOver) return;
+  playerDir = { dx, dy };
+  const nx = playerX + dx, ny = playerY + dy;
+
+  pregenAround(nx, ny);
+
+  // Check if enemy is blocking
+  const enemyIdx = enemies.findIndex(e => e.x === nx && e.y === ny);
+  if (enemyIdx !== -1) {
+    // Melee bump attack — costs no ammo
+    const e = enemies[enemyIdx];
+    e.hp--;
+    showMsg(`⚔ Golpeas al ${ENEMY_TYPES[e.type].name}! (${e.hp} HP restante)`);
+    if (e.hp <= 0) {
+      const name = ENEMY_TYPES[e.type].name;
+      const ex = e.x, ey = e.y;
+      enemies.splice(enemyIdx, 1);
+      score++;
+      if (Math.random() < diff().lootChance) setCell(ex, ey, '+');
+      showMsg(`💀 ${name} eliminado! +1 kill`);
+    }
+    updateStats();
+    render();
+    return;
+  }
+
+  const t = getCell(nx, ny);
+  if (t === '#') { showMsg('¡Muro bloqueado!'); render(); return; }
+  if (t === '~') {
+    const wd = diff().waterDmg;
+    if (wd > 0) { hp = Math.max(0, hp - wd); showMsg(`💧 El agua te daña -${wd} HP`); if (hp <= 0) { hp = 0; gameOver = true; } }
+    else { showMsg('💧 Cruzas el agua sin daño'); }
+  }
+  if (t === 'T') { showMsg('🌲 Cruzas el bosque...'); }
+  if (WEAPON_DEFS[t]) { pickupWeapon(nx, ny, t); setCell(nx, ny, '.'); }
+
+  // Health pickups
+  if (t === '+') {
+    const heal = 20;
+    hp = Math.min(maxHp, hp + heal);
+    setCell(nx, ny, '.');
+    showMsg(`🧪 Poción! +${heal} HP (${hp}/${maxHp})`);
+  }
+  if (t === '♥') {
+    const heal = 50;
+    const oldMax = maxHp;
+    maxHp = Math.min(200, maxHp + 10);
+    hp = Math.min(maxHp, hp + heal);
+    setCell(nx, ny, '.');
+    showMsg(`❤️ Corazón! +${heal} HP, MaxHP ${oldMax}→${maxHp}`);
+  }
+  if (t === '☕') {
+    const heal = 8;
+    hp = Math.min(maxHp, hp + heal);
+    setCell(nx, ny, '.');
+    showMsg(`☕ Café mágico! +${heal} HP y energía`);
+  }
+
+  playerX = nx; playerY = ny;
+  steps++;
+  regenSteps++;
+
+  // Passive regen — rate comes from difficulty
+  const regenRate = diff().regenRate;
+  if (regenRate > 0 && regenSteps >= regenRate && hp < maxHp) {
+    hp = Math.min(maxHp, hp + 1);
+    regenSteps = 0;
+    showMsg(`💚 +1 HP regenerado (${hp}/${maxHp})`, 800);
+  } else if (regenSteps >= Math.max(regenRate, 1)) {
+    regenSteps = 0;
+  }
+
+  spawnEnemiesAround(playerX, playerY);
+  updateStats();
+  render();
+}
+
+// ── SHOOT ───────────────────────────────────────────────
+function shoot() {
+  if (gameOver) return;
+  const w = activeWeapon();
+  if (!w) { showMsg('⚠ Sin armas! Busca W R S B M en el mapa'); return; }
+  if (w.ammo <= 0) { showMsg(`⚠ ${WEAPON_DEFS[w.type].name} sin munición!`); return; }
+
+  const def = WEAPON_DEFS[w.type];
+  w.ammo--;
+
+  // Direction vectors for spread
+  const { dx, dy } = playerDir;
+  // Perpendicular direction
+  const px = dy, py = -dx;
+
+  for (let s = 0; s < def.shots; s++) {
+    // Spread offset: center shot at 0, others evenly spread around
+    const offset = def.shots === 1 ? 0 : s - Math.floor(def.shots / 2);
+    const bx = playerX + dx + px * offset;
+    const by = playerY + dy + py * offset;
+    bullets.push({
+      x: bx, y: by,
+      dx, dy,
+      sym: def.bSym,
+      dmg: def.dmg,
+      speed: def.bSpeed,
+      lastTick: 0,
+    });
+  }
+
+  // Auto-switch if empty
+  if (w.ammo <= 0) {
+    showMsg(`💨 ${def.name} vacía!`);
+    inventory.splice(activeSlot, 1);
+    if (activeSlot >= inventory.length) activeSlot = Math.max(0, inventory.length - 1);
+  } else {
+    showMsg(`💥 ${def.name}! (${w.ammo} balas)`, 600);
+  }
+
+  updateStats();
+  render();
+
+  const sp = document.getElementById('btn-fire');
+  if (sp) { sp.classList.add('active'); setTimeout(() => sp.classList.remove('active'), 150); }
+}
+
+let bulletTick = 0;
+function tickBullets() {
+  if (bullets.length === 0) return;
+  bulletTick++;
+  const next = [];
+  let changed = false;
+
+  for (const b of bullets) {
+    // Per-bullet speed throttle
+    const interval = Math.round(b.speed / 110);
+    if (interval > 1 && bulletTick % interval !== 0) { next.push(b); continue; }
+
+    const nx = b.x + b.dx, ny = b.y + b.dy;
+
+    // Enemy hit
+    const eIdx = enemies.findIndex(e => e.x === nx && e.y === ny);
+    if (eIdx !== -1) {
+      const e = enemies[eIdx];
+      e.hp -= b.dmg;
+      changed = true;
+      if (e.hp <= 0) {
+        const name = ENEMY_TYPES[e.type].name;
+        const ex = e.x, ey = e.y;
+        enemies.splice(eIdx, 1);
+        score++;
+        if (Math.random() < diff().lootChance) setCell(ex, ey, '+');
+        updateStats();
+        showMsg(`💥 ${name} abatido! +1 kill`);
+      } else {
+        showMsg(`💥 Impacto en ${ENEMY_TYPES[e.type].name}! (${e.hp} HP)`);
+      }
+      continue;
+    }
+
+    const t = getCell(nx, ny);
+    if (t === '#') { changed = true; continue; }
+    if (t === 'T') { setCell(nx, ny, '.'); showMsg('🌲 ¡Árbol destruido!'); changed = true; continue; }
+    if (t === '~') { changed = true; continue; }
+    next.push({ ...b, x: nx, y: ny });
+    changed = true;
+  }
+  bullets = next;
+  if (changed) render();
+}
+
+setInterval(tickBullets, 110);
+
+// ── INPUT ───────────────────────────────────────────────
+// Ensure the page always captures keypresses regardless of what has focus
+window.addEventListener('keydown', e => {
+  if (!gameMode) return; // mode not selected yet
+  if (gameOver) {
+    if (e.key.toLowerCase() === 'r') reset();
+    return;
+  }
+  // Switch weapon slots with 1-5
+  if (['1','2','3','4','5'].includes(e.key)) {
+    const slot = parseInt(e.key) - 1;
+    if (slot < inventory.length) {
+      activeSlot = slot;
+      showMsg(`🔫 ${WEAPON_DEFS[inventory[slot].type].name} activa`);
+      updateStats(); render();
+    }
+    return;
+  }
+  if (e.key === ' ') { e.preventDefault(); shoot(); return; }
+  const key = e.key.toLowerCase();
+  if (!['w','a','s','d'].includes(key)) return;
+  e.preventDefault();
+  flashKey(key);
+  if (key === 'w') move( 0, -1);
+  if (key === 's') move( 0,  1);
+  if (key === 'a') move(-1,  0);
+  if (key === 'd') move( 1,  0);
+}, true); // capture phase so nothing can block it
+
+// ── RESET ───────────────────────────────────────────────
+function reset() {
+  masterSeed = Date.now() & 0xffffff;
+  world.clear();
+  playerX = 0; playerY = 0;
+  playerDir = { dx: 1, dy: 0 };
+  weapons = 0; steps = 0; hp = 100; maxHp = 100;
+  bullets = [];
+  enemies = [];
+  score    = 0;
+  gameOver  = false;
+  regenSteps = 0;
+  inventory  = [];
+  activeSlot = 0;
+
+  pregenAround(0, 0);
+
+  // Find a walkable starting cell near origin
+  let found = false;
+  outer: for (let r = 0; r <= 30; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.abs(dx) === r || Math.abs(dy) === r) {
+          if (getCell(dx, dy) === '.') {
+            playerX = dx; playerY = dy;
+            found = true; break outer;
+          }
+        }
+      }
+    }
+  }
+
+  updateStats();
+  render();
+  showMsg('✦ Mundo infinito generado — ¡explora sin límites! ✦');
+}
+
+// ═══════════════════════════════════════════════════════
+//  MENU SYSTEM
+// ═══════════════════════════════════════════════════════
+let gameMode   = null;   // 'pc' | 'mobile'
+let difficulty = 'normal';
+
+// Difficulty presets — affect spawn rate, enemy stats, regen, loot
+const DIFF_PRESETS = {
+  baby:   { label:'🍼 BEBÉ',    spawnChance:0,    enemyHpMult:0.5, enemyDmgMult:0.3, regenRate:5,  lootChance:0.8,  waterDmg:0   },
+  easy:   { label:'🌿 FÁCIL',   spawnChance:0.2,  enemyHpMult:0.75,enemyDmgMult:0.5, regenRate:8,  lootChance:0.6,  waterDmg:3   },
+  normal: { label:'⚔ NORMAL',   spawnChance:0.35, enemyHpMult:1,   enemyDmgMult:1,   regenRate:15, lootChance:0.35, waterDmg:5   },
+  hard:   { label:'🔥 DIFÍCIL', spawnChance:0.55, enemyHpMult:1.5, enemyDmgMult:1.5, regenRate:30, lootChance:0.2,  waterDmg:10  },
+  hell:   { label:'💀 INFIERNO',spawnChance:0.75, enemyHpMult:2,   enemyDmgMult:2,   regenRate:0,  lootChance:0.1,  waterDmg:15  },
+};
+function diff() { return DIFF_PRESETS[difficulty]; }
+
+// ── NAV helpers ──
+function showScreen(id) {
+  ['screen-main','screen-options','screen-howto'].forEach(s => {
+    document.getElementById(s).classList.toggle('hidden', s !== id);
+  });
+}
+
+// ── START GAME ──
+function startGame() {
+  // Hide all menu screens
+  ['screen-main','screen-options','screen-howto'].forEach(s =>
+    document.getElementById(s).classList.add('hidden'));
+
+  // Touch controls visibility
+  document.getElementById('touch-controls').style.display =
+    gameMode === 'mobile' ? 'flex' : 'none';
+
+  reset();
+}
+
+// ── Return to main menu ──
+function goToMenu() {
+  gameMode = null;
+  showScreen('screen-main');
+  document.getElementById('touch-controls').style.display = 'none';
+}
+
+// ── MAIN MENU buttons ──
+document.getElementById('btn-play').addEventListener('click', () => {
+  // If no mode chosen yet, go to options first
+  if (!gameMode) { showScreen('screen-options'); return; }
+  startGame();
+});
+document.getElementById('btn-options').addEventListener('click', () => showScreen('screen-options'));
+document.getElementById('btn-howto').addEventListener('click',   () => showScreen('screen-howto'));
+
+// ── OPTIONS: device toggle ──
+document.getElementById('tog-pc').addEventListener('click', () => {
+  gameMode = 'pc';
+  document.getElementById('tog-pc').classList.add('sel');
+  document.getElementById('tog-mobile').classList.remove('sel');
+});
+document.getElementById('tog-mobile').addEventListener('click', () => {
+  gameMode = 'mobile';
+  document.getElementById('tog-mobile').classList.add('sel');
+  document.getElementById('tog-pc').classList.remove('sel');
+});
+
+// ── OPTIONS: difficulty cards ──
+document.querySelectorAll('.diff-card').forEach(card => {
+  card.addEventListener('click', () => {
+    document.querySelectorAll('.diff-card').forEach(c => c.classList.remove('sel'));
+    card.classList.add('sel');
+    difficulty = card.dataset.diff;
+  });
+});
+
+// ── OPTIONS: back / play ──
+document.getElementById('btn-opts-back').addEventListener('click', () => showScreen('screen-main'));
+document.getElementById('btn-opts-play').addEventListener('click', () => {
+  if (!gameMode) { gameMode = 'pc'; } // default to PC if user never picked
+  startGame();
+});
+
+// ── HOW TO PLAY: back / play ──
+document.getElementById('btn-howto-back').addEventListener('click', () => showScreen('screen-main'));
+document.getElementById('btn-howto-play').addEventListener('click', () => {
+  if (!gameMode) { gameMode = 'pc'; }
+  startGame();
+});
+
+// ── IN-GAME: change mode button → back to menu ──
+document.getElementById('btn-regen').addEventListener('click', reset);
+document.getElementById('btn-change-mode').addEventListener('click', goToMenu);
+
+// ── Help modal ──
+const helpOverlay = document.getElementById('help-overlay');
+document.getElementById('btn-help').addEventListener('click', () => helpOverlay.classList.toggle('open'));
+document.getElementById('help-close').addEventListener('click', () => helpOverlay.classList.remove('open'));
+helpOverlay.addEventListener('click', e => { if (e.target === helpOverlay) helpOverlay.classList.remove('open'); });
+
+// ── D-pad ──
+document.getElementById('dbtn-w').addEventListener('click', () => { flashKey('w'); move( 0,-1); });
+document.getElementById('dbtn-s').addEventListener('click', () => { flashKey('s'); move( 0, 1); });
+document.getElementById('dbtn-a').addEventListener('click', () => { flashKey('a'); move(-1, 0); });
+document.getElementById('dbtn-d').addEventListener('click', () => { flashKey('d'); move( 1, 0); });
+document.getElementById('btn-fire').addEventListener('click', () => shoot());
+
+// ── Keyboard guard: block input until game is running ──
+// (keydown listener already checks `if (!gameMode) return`)
+</script>
+</body>
+</html>

@@ -1,0 +1,586 @@
+<!-- Combined single-file export — CSS and JS inlined. Generated programmatically. -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Clon 2D — Agua, Árboles, Fogata y Keybinds</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+
+<style>
+:root{
+  --panel:#0b1220;
+  --accent:#facc15;
+}
+body { font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+
+.canvas-wrapper { border-radius:10px; overflow:hidden; }
+canvas { image-rendering: pixelated; display:block; background: linear-gradient(#87CEEB,#6ec0ff); border-radius:8px; }
+
+/* UI */
+.panel{ background: rgba(8,11,17,0.7); padding:10px; border-radius:8px; border:1px solid rgba(255,255,255,0.03); }
+.btn{ background:#0f1724; padding:6px 10px; border-radius:6px; cursor:pointer; border:1px solid rgba(255,255,255,0.03); }
+.small{ color:#cbd5e1; font-size:13px; }
+
+/* Hotbar slots */
+#hotbar .slot{ width:44px; height:44px; border-radius:6px; display:flex; align-items:center; justify-content:center; border:1px solid rgba(255,255,255,0.04); cursor:pointer; position:relative; }
+#hotbar .slot.selected{ outline:3px solid var(--accent); transform:scale(1.04); }
+#hotbar .count{ position:absolute; right:4px; bottom:3px; font-size:12px; color:white; text-shadow:0 1px 0 #000a; }
+
+/* Modal */
+.modal{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.5); z-index:40; }
+.hidden{ display:none; }
+.modal-content{ width:360px; max-width:90%; }
+
+/* key input */
+.key-input{ width:100%; padding:8px; border-radius:6px; background:#071025; border:1px solid rgba(255,255,255,0.03); color:#fff; }
+
+/* HUD small tweaks */
+.panel .small{ margin-bottom:4px; display:block; }
+
+</style>
+</head>
+<body class="bg-slate-900 text-white flex flex-col items-center min-h-screen p-4">
+
+  <header class="w-full max-w-6xl mb-3 flex items-center justify-between">
+    <h1 class="text-2xl font-bold">Clon 2D — Agua · Árboles · Fogata</h1>
+    <div>
+      <button id="openControls" class="btn mr-2">Configurar teclas</button>
+      <button id="compactBtn" class="btn">Compactar inventario (R)</button>
+    </div>
+  </header>
+
+  <main class="w-full max-w-6xl flex flex-col items-center">
+    <div class="panel mb-3">
+      <canvas id="gameCanvas" width="1024" height="576"></canvas>
+    </div>
+
+    <div class="w-full flex justify-between gap-4 items-start">
+      <div class="panel flex items-center gap-4">
+        <div class="small">Barra rápida (1–9)</div>
+        <div id="hotbar" class="flex gap-2"></div>
+        <div class="small ml-4">Seleccioná click o 1–9</div>
+      </div>
+
+      <div class="panel">
+        <div class="small">Guardado:</div>
+        <div id="saveStatus" class="small">—</div>
+        <div class="mt-2">
+          <button id="clearSave" class="btn">Borrar guardado</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Modal Controls -->
+  <div id="controlsModal" class="modal hidden">
+    <div class="modal-content panel">
+      <h2 class="text-lg font-bold mb-2">Configurar teclas</h2>
+      <div class="mb-2">
+        <label class="small">Mover izquierda</label>
+        <input data-bind="left" class="key-input" />
+      </div>
+      <div class="mb-2">
+        <label class="small">Mover derecha</label>
+        <input data-bind="right" class="key-input" />
+      </div>
+      <div class="mb-2">
+        <label class="small">Saltar</label>
+        <input data-bind="jump" class="key-input" />
+      </div>
+      <div class="mb-2">
+        <label class="small">Colocar</label>
+        <input data-bind="place" class="key-input" />
+      </div>
+      <div class="mb-2">
+        <label class="small">Romper</label>
+        <input data-bind="break" class="key-input" />
+      </div>
+
+      <div class="flex gap-2 mt-3">
+        <button id="saveKeys" class="btn">Guardar</button>
+        <button id="resetKeys" class="btn">Resetear</button>
+        <button id="closeControls" class="btn">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  
+
+<script>
+// main.js — Clon 2D con agua, árboles, fogata y keybinds
+// Guardá este archivo como main.js y abrí index.html.
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+const BLOCK = 20;
+const CHUNK = 32;
+const GRAVITY = 0.48;
+const SPEED = 4;
+const JUMP = 10;
+const WATER_DRAG = 0.45;
+const WATER_BUOYANCY = 0.25;
+
+const STORAGE_KEY = 'mc2d_super_v2';
+
+const BLOCK_TYPES = {
+  0: { name:'Aire', color:'transparent', solid:false },
+  1: { name:'Hierba', color:'#22c55e', solid:true },
+  2: { name:'Tierra', color:'#854d0e', solid:true },
+  3: { name:'Piedra', color:'#6b7280', solid:true },
+  4: { name:'Tronco', color:'#8b5a2b', solid:true },
+  5: { name:'Hoja', color:'#15803d', solid:true },
+  6: { name:'Agua', color:'#3b82f6', solid:false, fluid:true },
+  7: { name:'Fogata', color:'#ff7a18', solid:true, light:true }
+};
+
+/* -------------------------
+   Estado
+--------------------------*/
+let camera = { x:0, y:0 };
+let keys = {};
+let mouse = { x:0, y:0 };
+let selectedSlot = 0;
+let inventory = new Array(36).fill(null).map(()=>({id:0,count:0}));
+inventory[0] = {id:1,count:64};
+inventory[1] = {id:4,count:16};
+inventory[2] = {id:6,count:64};
+
+let modified = {}; // "wx,wy": id
+const chunks = new Map();
+const perlin = makePerlin(98765);
+
+/* Player */
+let player = { x: CHUNK*BLOCK*2, y: CHUNK*BLOCK*6, w: BLOCK*0.9, h: BLOCK*1.8, vx:0, vy:0, grounded:false };
+
+/* Keybinds */
+const defaultKeys = { left:'a', right:'d', jump:'w', place:'Mouse2', break:'Mouse1' };
+let keybinds = loadKeybinds();
+
+/* UI refs */
+const hotbarEl = document.getElementById('hotbar');
+const saveStatus = document.getElementById('saveStatus');
+const clearSaveBtn = document.getElementById('clearSave');
+const compactBtn = document.getElementById('compactBtn');
+const openControls = document.getElementById('openControls');
+const controlsModal = document.getElementById('controlsModal');
+const closeControls = document.getElementById('closeControls');
+const saveKeysBtn = document.getElementById('saveKeys');
+const resetKeysBtn = document.getElementById('resetKeys');
+
+/* Build hotbar */
+function buildHotbar(){
+  hotbarEl.innerHTML = '';
+  for(let i=0;i<9;i++){
+    const div = document.createElement('div');
+    div.className = 'slot';
+    if(i===selectedSlot) div.classList.add('selected');
+    div.dataset.idx = i;
+    const slot = inventory[i];
+    div.style.background = slot && slot.id ? BLOCK_TYPES[slot.id].color : 'rgba(255,255,255,0.02)';
+    const c = document.createElement('div'); c.className='count'; c.textContent = slot.count>0 ? slot.count : '';
+    div.appendChild(c);
+    div.addEventListener('click', ()=>{ selectedSlot=i; updateHotbar(); });
+    hotbarEl.appendChild(div);
+  }
+}
+function updateHotbar(){
+  const nodes = hotbarEl.children;
+  for(let i=0;i<9;i++){
+    const el = nodes[i];
+    el.classList.toggle('selected', i===selectedSlot);
+    const slot = inventory[i];
+    el.style.background = slot && slot.id ? BLOCK_TYPES[slot.id].color : 'rgba(255,255,255,0.02)';
+    el.querySelector('.count').textContent = slot.count>0 ? slot.count : '';
+  }
+}
+
+/* -------------------------
+   Perlin & FBM
+--------------------------*/
+function makePerlin(seed=1337){
+  function s32(s){ return function(){ s |= 0; s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s>>>15,1|s); t = t + Math.imul(t ^ t>>>7,61|t) ^ t; return ((t ^ t>>>14) >>>0) / 4294967296; }; }
+  const rnd = s32(seed);
+  let perm = new Uint8Array(256);
+  for(let i=0;i<256;i++) perm[i]=i;
+  for(let i=255;i>0;i--){ const j=Math.floor(rnd()*(i+1)); [perm[i],perm[j]]=[perm[j],perm[i]]; }
+  const p = new Uint8Array(512); for(let i=0;i<512;i++) p[i]=perm[i&255];
+  function fade(t){ return t*t*t*(t*(t*6-15)+10); }
+  function lerp(a,b,t){ return a + t*(b-a); }
+  function grad(hash,x,y){ const h=hash&3; return h===0? x+y : h===1? -x+y : h===2? x-y : -x-y; }
+  return function noise2(x,y){
+    const X=Math.floor(x)&255, Y=Math.floor(y)&255;
+    const xf=x-Math.floor(x), yf=y-Math.floor(y);
+    const tl = p[p[X]+Y], tr=p[p[X+1]+Y], bl=p[p[X]+Y+1], br=p[p[X+1]+Y+1];
+    const u=fade(xf), v=fade(yf);
+    const x1 = lerp(grad(tl, xf, yf), grad(tr, xf-1, yf), u);
+    const x2 = lerp(grad(bl, xf, yf-1), grad(br, xf-1, yf-1), u);
+    return lerp(x1,x2,v);
+  };
+}
+function fbm(x,y,oct=5){
+  let amp=1,freq=1,sum=0,max=0;
+  for(let i=0;i<oct;i++){ sum += perlin(x*freq,y*freq)*amp; max += amp; amp *= 0.5; freq *= 2; }
+  return sum/max;
+}
+
+/* -------------------------
+   Chunks (generate with lakes + trees)
+--------------------------*/
+function ckey(cx,cy){ return `${cx},${cy}`; }
+function genChunk(cx,cy){
+  const k = ckey(cx,cy);
+  if(chunks.has(k)) return chunks.get(k);
+  const arr = Array.from({length:CHUNK}, ()=>new Array(CHUNK).fill(0));
+  const base = Math.floor(CHUNK*0.45);
+  for(let x=0;x<CHUNK;x++){
+    const wx = cx*CHUNK + x;
+    const n = fbm(wx*0.04, cy*0.1);
+    const surface = Math.floor(base + n * (CHUNK*0.22));
+    for(let y=surface;y<CHUNK;y++){
+      arr[x][y] = y===surface?1 : y<surface+4?2 : 3;
+    }
+    // lakes: perlin low value -> water filling up to certain height
+    const lakeVal = fbm(wx*0.06, cy*0.06);
+    if(lakeVal > 0.45){
+      const lakeTop = surface + Math.floor(2 + (lakeVal-0.45)*8);
+      for(let yy=surface+1; yy<=lakeTop; yy++){
+        if(yy<CHUNK) arr[x][yy] = 6; // agua
+      }
+    }
+    // trees near certain perlin peaks
+    if(Math.abs(perlin(wx*0.08, cy*0.02)) > 0.6){
+      const tx = x, ty = surface-1;
+      if(ty>=2 && tx+2<CHUNK && arr[tx][ty] === 1){
+        arr[tx][ty] = 4; // tronco sobre superficie
+        if(ty-1>=0) arr[tx][ty-1] = 4;
+        // leaves
+        for(let lx=-2; lx<=2; lx++){
+          for(let ly=-3; ly<=0; ly++){
+            const ax = tx+lx, ay=ty+ly;
+            if(ax>=0 && ax<CHUNK && ay>=0 && ay<CHUNK && arr[ax][ay]===0) arr[ax][ay]=5;
+          }
+        }
+      }
+    }
+  }
+  chunks.set(k, arr);
+  return arr;
+}
+
+/* Read/write world block (world coords) */
+function getBlock(wx,wy){
+  const mk = `${wx},${wy}`; if(modified.hasOwnProperty(mk)) return modified[mk];
+  const cx = Math.floor(wx/CHUNK), cy = Math.floor(wy/CHUNK);
+  const chunk = genChunk(cx,cy);
+  const lx = ((wx%CHUNK)+CHUNK)%CHUNK, ly = ((wy%CHUNK)+CHUNK)%CHUNK;
+  return chunk[lx][ly] || 0;
+}
+function setBlock(wx,wy,id){
+  const mk = `${wx},${wy}`; modified[mk] = id;
+}
+
+/* -------------------------
+   Input
+--------------------------*/
+document.addEventListener('keydown', e=>{
+  const k = e.key.toLowerCase();
+  keys[k] = true;
+  // hotbar 1..9
+  if(/^[1-9]$/.test(e.key)){ selectedSlot = parseInt(e.key)-1; updateHotbar(); }
+  if(k === 'r') compactInventory();
+});
+document.addEventListener('keyup', e=>{ keys[e.key.toLowerCase()] = false; });
+canvas.addEventListener('mousemove', e=>{
+  const r = canvas.getBoundingClientRect();
+  mouse.x = e.clientX - r.left;
+  mouse.y = e.clientY - r.top;
+});
+canvas.addEventListener('mousedown', e=>{
+  const rect = canvas.getBoundingClientRect();
+  const wx = Math.floor((e.clientX - rect.left + camera.x)/BLOCK);
+  const wy = Math.floor((e.clientY - rect.top + camera.y)/BLOCK);
+  if(e.button === 0){ // left - break
+    const id = getBlock(wx,wy);
+    if(id>0 && id!==6){ // don't "mine" water with left click (optional)
+      setBlock(wx,wy,0);
+      addToInv(id,1);
+      saveDebounced();
+    }
+  } else if(e.button === 2){ // right - place
+    const slot = inventory[selectedSlot];
+    if(slot && slot.id>0 && slot.count>0){
+      const blockRect = { x:wx*BLOCK, y:wy*BLOCK, w:BLOCK, h:BLOCK };
+      const pRect = { x:player.x, y:player.y, w:player.w, h:player.h };
+      if(!aabb(blockRect,pRect)){
+        setBlock(wx,wy,slot.id);
+        slot.count--;
+        if(slot.count<=0) { slot.id=0; slot.count=0; }
+        updateHotbar();
+        saveDebounced();
+      }
+    }
+  }
+});
+canvas.addEventListener('contextmenu', e=>e.preventDefault());
+
+/* Hotbar UI */
+function addToInv(id,count=1){
+  if(id<=0) return;
+  for(let s of inventory){
+    if(s.id === id){ s.count += count; updateHotbar(); return; }
+  }
+  for(let s of inventory){
+    if(s.id === 0){ s.id = id; s.count = count; updateHotbar(); return; }
+  }
+  // full -> drop (ignored)
+}
+
+/* Compact inventory */
+function compactInventory(){
+  const map = {};
+  for(let s of inventory){ if(s.id>0) { map[s.id] = (map[s.id]||0) + s.count; s.id=0; s.count=0; } }
+  let i=0;
+  for(const id in map){ inventory[i].id = parseInt(id); inventory[i].count = map[id]; i++; }
+  for(;i<inventory.length;i++){ inventory[i].id=0; inventory[i].count=0; }
+  updateHotbar(); saveDebounced();
+}
+
+/* -------------------------
+   Physics & fluids
+--------------------------*/
+function aabb(a,b){ return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y; }
+
+function resolve(){
+  // horizontal
+  const left = keys[keybinds.left] || keys[keybinds.left.toLowerCase()];
+  const right = keys[keybinds.right] || keys[keybinds.right.toLowerCase()];
+  player.vx = left ? -SPEED : right ? SPEED : 0;
+
+  // detect if in water
+  const footX = Math.floor((player.x + player.w/2)/BLOCK);
+  const footY = Math.floor((player.y + player.h - 2)/BLOCK);
+  const inWater = getBlock(footX, footY) === 6;
+
+  if(inWater){
+    player.vx *= WATER_DRAG;
+    // buoyancy: push up slightly if submerged
+    player.vy -= WATER_BUOYANCY;
+    if(player.vy > 6) player.vy = 6;
+  }
+
+  // jump
+  const jumpKey = keybinds.jump.toLowerCase();
+  if((keys[jumpKey] || keys[jumpKey.toUpperCase()]) && player.grounded){
+    player.vy = -JUMP * (inWater ? 0.6 : 1);
+    player.grounded = false;
+  }
+
+  player.x += player.vx;
+  // horizontal collisions
+  const fromX = Math.floor((player.x-2)/BLOCK), toX = Math.floor((player.x+player.w+2)/BLOCK);
+  const fromY = Math.floor((player.y-2)/BLOCK), toY = Math.floor((player.y+player.h+2)/BLOCK);
+  for(let x=fromX;x<=toX;x++){
+    for(let y=fromY;y<=toY;y++){
+      const id = getBlock(x,y);
+      if(id === 0 || id === 6) continue; // ignore air and water for solidity
+      const block = { x:x*BLOCK, y:y*BLOCK, w:BLOCK, h:BLOCK };
+      const p = { x:player.x, y:player.y, w:player.w, h:player.h };
+      if(aabb(p,block)){
+        if(player.vx > 0) player.x = block.x - player.w;
+        if(player.vx < 0) player.x = block.x + BLOCK;
+        player.vx = 0;
+      }
+    }
+  }
+
+  // vertical
+  player.vy += GRAVITY * (inWater ? 0.3 : 1);
+  player.y += player.vy;
+  player.grounded = false;
+  const fromX2 = Math.floor((player.x-2)/BLOCK), toX2 = Math.floor((player.x+player.w+2)/BLOCK);
+  const fromY2 = Math.floor((player.y-2)/BLOCK), toY2 = Math.floor((player.y+player.h+2)/BLOCK);
+  for(let x=fromX2;x<=toX2;x++){
+    for(let y=fromY2;y<=toY2;y++){
+      const id = getBlock(x,y);
+      if(id === 0) continue;
+      // water doesn't block vertically either (you can move through)
+      if(id === 6) continue;
+      const block = { x:x*BLOCK, y:y*BLOCK, w:BLOCK, h:BLOCK };
+      const p = { x:player.x, y:player.y, w:player.w, h:player.h };
+      if(aabb(p,block)){
+        if(player.vy > 0){ player.y = block.y - player.h; player.vy = 0; player.grounded = true; }
+        else if(player.vy < 0){ player.y = block.y + BLOCK; player.vy = 0; }
+      }
+    }
+  }
+}
+
+/* -------------------------
+   Camera
+--------------------------*/
+function updateCamera(){
+  camera.x = player.x - canvas.width/2 + player.w/2;
+  camera.y = player.y - canvas.height/2 + player.h/2;
+}
+
+/* -------------------------
+   Rendering (with fogata light)
+--------------------------*/
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.save();
+  ctx.translate(-camera.x, -camera.y);
+
+  const startX = Math.floor(camera.x/BLOCK)-3;
+  const endX = Math.ceil((camera.x+canvas.width)/BLOCK)+3;
+  const startY = Math.floor(camera.y/BLOCK)-3;
+  const endY = Math.ceil((camera.y+canvas.height)/BLOCK)+3;
+
+  // draw blocks
+  for(let wx=startX; wx<=endX; wx++){
+    for(let wy=startY; wy<=endY; wy++){
+      const id = getBlock(wx,wy);
+      if(id===0) continue;
+      ctx.fillStyle = BLOCK_TYPES[id].color;
+      ctx.fillRect(wx*BLOCK, wy*BLOCK, BLOCK, BLOCK);
+      ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+      ctx.strokeRect(wx*BLOCK, wy*BLOCK, BLOCK, BLOCK);
+    }
+  }
+
+  // fogata lights (glow)
+  for(let mx = startX; mx<=endX; mx++){
+    for(let my=startY; my<=endY; my++){
+      if(getBlock(mx,my) === 7){
+        const cx = mx*BLOCK + BLOCK/2, cy = my*BLOCK + BLOCK/2;
+        const grad = ctx.createRadialGradient(cx,cy,0,cx,cy, BLOCK*3);
+        grad.addColorStop(0, 'rgba(255,200,90,0.9)');
+        grad.addColorStop(0.4, 'rgba(255,120,20,0.4)');
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = grad;
+        ctx.fillRect(cx - BLOCK*3, cy - BLOCK*3, BLOCK*6, BLOCK*6);
+      }
+    }
+  }
+
+  // player
+  ctx.fillStyle = '#ef4444';
+  ctx.fillRect(player.x, player.y, player.w, player.h);
+
+  // highlight hovered
+  const mx = Math.floor((mouse.x + camera.x)/BLOCK);
+  const my = Math.floor((mouse.y + camera.y)/BLOCK);
+  ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(mx*BLOCK, my*BLOCK, BLOCK, BLOCK);
+
+  ctx.restore();
+}
+
+/* -------------------------
+   Loop
+--------------------------*/
+function loop(){
+  resolve();
+  updateCamera();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+/* -------------------------
+   Persistence
+--------------------------*/
+const saveEl = saveStatus;
+function saveAll(){
+  try{
+    const data = { modified, inventory, player:{x:player.x,y:player.y}, keybinds, timestamp:Date.now() };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    saveEl.textContent = 'Guardado ' + new Date().toLocaleTimeString();
+  }catch(e){ saveEl.textContent = 'Error al guardar'; console.warn(e); }
+}
+let saveTimer = null;
+function saveDebounced(){
+  if(saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(()=>{ saveAll(); saveTimer = null; }, 500);
+}
+function loadAll(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return false;
+    const data = JSON.parse(raw);
+    if(data.modified) Object.assign(modified, data.modified);
+    if(data.inventory) inventory = data.inventory;
+    if(data.player) { player.x = data.player.x; player.y = data.player.y; }
+    if(data.keybinds) keybinds = data.keybinds;
+    saveEl.textContent = 'Cargado ' + new Date(data.timestamp).toLocaleString();
+    return true;
+  }catch(e){ console.warn('Load err', e); return false; }
+}
+clearSaveBtn.addEventListener('click', ()=>{ if(confirm('Borrar guardado local?')){ localStorage.removeItem(STORAGE_KEY); location.reload(); } });
+compactBtn.addEventListener('click', compactInventory);
+
+/* -------------------------
+   Keybinds modal
+--------------------------*/
+document.getElementById('openControls').addEventListener('click', ()=>{ buildControls(); controlsModal.classList.remove('hidden'); });
+closeControls.addEventListener('click', ()=>controlsModal.classList.add('hidden'));
+saveKeysBtn.addEventListener('click', ()=>{ saveControls(); controlsModal.classList.add('hidden'); });
+resetKeysBtn.addEventListener('click', ()=>{ keybinds = defaultKeys; saveKeybinds(); buildControls(); });
+
+function buildControls(){
+  const inputs = document.querySelectorAll('.key-input');
+  inputs.forEach(inp=>{
+    const k = inp.getAttribute('data-bind');
+    inp.value = keybinds[k] || defaultKeys[k];
+    // listen for capture
+    inp.onkeydown = (ev)=>{ ev.preventDefault(); inp.value = ev.key; keybinds[k]=ev.key.toLowerCase(); saveKeybinds(); };
+  });
+}
+function saveControls(){ saveKeybinds(); alert('Teclas guardadas!'); }
+function saveKeybinds(){ localStorage.setItem('mc2d_keybinds_v2', JSON.stringify(keybinds)); }
+function loadKeybinds(){
+  try{ const raw = localStorage.getItem('mc2d_keybinds_v2'); return raw ? JSON.parse(raw) : Object.assign({}, defaultKeys); }catch(e){ return Object.assign({}, defaultKeys); }
+}
+
+/* -------------------------
+   Init / helpers
+--------------------------*/
+function updateHotbar(){ buildHotbar(); }
+buildHotbar();
+updateHotbar();
+loadAll();
+loop();
+window.addEventListener('beforeunload', saveAll);
+
+// expose for debug
+window._mc = { chunks, modified, inventory, player };
+
+/* -------------------------
+   Utility: Perlin provided earlier uses closure
+--------------------------*/
+function makePerlin(seed=1337){
+  function s32(s){ return function(){ s |= 0; s = s + 0x6D2B79F5 | 0; let t = Math.imul(s ^ s>>>15,1|s); t = t + Math.imul(t ^ t>>>7,61|t) ^ t; return ((t ^ t>>>14) >>>0) / 4294967296; }; }
+  const rnd = s32(seed);
+  let perm = new Uint8Array(256);
+  for(let i=0;i<256;i++) perm[i]=i;
+  for(let i=255;i>0;i--){ const j=Math.floor(rnd()*(i+1)); [perm[i],perm[j]]=[perm[j],perm[i]]; }
+  const p = new Uint8Array(512); for(let i=0;i<512;i++) p[i]=perm[i&255];
+  function fade(t){ return t*t*t*(t*(t*6-15)+10); }
+  function lerp(a,b,t){ return a + t*(b-a); }
+  function grad(hash,x,y){ const h=hash&3; return h===0? x+y : h===1? -x+y : h===2? x-y : -x-y; }
+  return function noise2(x,y){
+    const X=Math.floor(x)&255, Y=Math.floor(y)&255;
+    const xf=x-Math.floor(x), yf=y-Math.floor(y);
+    const tl = p[p[X]+Y], tr=p[p[X+1]+Y], bl=p[p[X]+Y+1], br=p[p[X+1]+Y+1];
+    const u=fade(xf), v=fade(yf);
+    const x1 = lerp(grad(tl, xf, yf), grad(tr, xf-1, yf), u);
+    const x2 = lerp(grad(bl, xf, yf-1), grad(br, xf-1, yf-1), u);
+    return lerp(x1,x2,v);
+  };
+}
+</script>
+</body>
+</html>
